@@ -3,7 +3,11 @@ version: "3.8"
 services:
   monkeytype-frontend:
     container_name: monkeytype-frontend
-    image: monkeytype/monkeytype-frontend:latest
+    image: monkeytype-duel-frontend:latest
+    pull_policy: never
+    build:
+      context: ..
+      dockerfile: ./docker/frontend/Dockerfile
     ports:
       - "${HTTP_PORT:-8080}:80"
     restart: on-failure
@@ -25,7 +29,11 @@ services:
 
   monkeytype-backend:
     container_name: monkeytype-backend
-    image: monkeytype/monkeytype-backend:latest
+    image: monkeytype-duel-backend:latest
+    pull_policy: never
+    build:
+      context: ..
+      dockerfile: ./docker/backend/Dockerfile
     ports:
       - "${BACKEND_PORT:-5005}:5005"
     restart: on-failure
