@@ -36,3 +36,4 @@ function getVersion(): string {
 }
 
 export const version = getVersion();
+// CI test
