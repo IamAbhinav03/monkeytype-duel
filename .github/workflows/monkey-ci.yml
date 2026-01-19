@@ -25,7 +25,7 @@ jobs:
   pre-ci:
     if: github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'force-ci') || contains(github.event.pull_request.labels.*.name, 'force-full-ci')
     name: pre-ci
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       should-build-be: ${{ steps.export-changes.outputs.should-build-be }}
       should-build-fe: ${{ steps.export-changes.outputs.should-build-fe }}
@@ -76,7 +76,7 @@ jobs:
 
   prime-cache:
     name: prime-cache
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [pre-ci]
     if: needs.pre-ci.outputs.should-build-be == 'true' || needs.pre-ci.outputs.should-build-fe == 'true' || needs.pre-ci.outputs.should-build-pkg == 'true' || needs.pre-ci.outputs.assets-json == 'true' || contains(github.event.pull_request.labels.*.name, 'force-full-ci')
     steps:
@@ -123,7 +123,7 @@ jobs:
   ci-be:
     name: ci-be
     needs: [pre-ci, prime-cache]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: needs.pre-ci.outputs.should-build-be == 'true' || needs.pre-ci.outputs.should-build-pkg == 'true' || contains(github.event.pull_request.labels.*.name, 'force-full-ci')
     steps:
       - uses: actions/checkout@v4
@@ -171,7 +171,7 @@ jobs:
   ci-fe:
     name: ci-fe
     needs: [pre-ci, prime-cache]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: needs.pre-ci.outputs.should-build-fe == 'true' || needs.pre-ci.outputs.should-build-pkg == 'true' || contains(github.event.pull_request.labels.*.name, 'force-full-ci')
     steps:
       - uses: actions/checkout@v4
@@ -223,7 +223,7 @@ jobs:
   ci-assets:
     name: ci-assets
     needs: [pre-ci, prime-cache]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: needs.pre-ci.outputs.assets-json == 'true' || contains(github.event.pull_request.labels.*.name, 'force-full-ci')
     steps:
       - uses: actions/checkout@v4
@@ -291,7 +291,7 @@ jobs:
   ci-pkg:
     name: ci-pkg
     needs: [pre-ci, prime-cache]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: needs.pre-ci.outputs.should-build-pkg == 'true' || contains(github.event.pull_request.labels.*.name, 'force-full-ci')
     steps:
       - uses: actions/checkout@v4
@@ -338,7 +338,7 @@ jobs:
   on-failure:
     permissions: write-all
     name: on-failure
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [ci-be, ci-fe, ci-assets, ci-pkg]
     if: ${{ always() && contains(needs.*.result, 'failure') && github.ref != 'refs/heads/master' }}
     steps:
