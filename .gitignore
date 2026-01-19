@@ -69,6 +69,10 @@ node_modules_bak/
 .env
 .env*
 
+# This one doesn't have any sensitive data, just local development config
+!docker/.env 
+
+
 #vs code
 .vscode/*
 .vscode/.*
