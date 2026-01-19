@@ -14,7 +14,7 @@ on:
 
 jobs:
   format:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event.label.name == 'format'
     steps:
       - name: Checkout code
