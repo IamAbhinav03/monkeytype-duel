@@ -1,0 +1,46 @@
+{
+  "name": "@monkeytype/tribes-server",
+  "version": "1.0.0",
+  "private": true,
+  "license": "GPL-3.0",
+  "scripts": {
+    "lint": "oxlint .",
+    "lint-fast": "oxlint .",
+    "build": "tsc --build",
+    "watch": "tsc --build --watch",
+    "clean": "tsc --build --clean",
+    "ts-check": "tsc --noEmit",
+    "start": "node ./dist/server.js",
+    "test": "vitest run",
+    "dev": "concurrently -p none \"tsx watch --clear-screen=false ./src/server.ts\" \"tsc --preserveWatchOutput --noEmit --watch\"",
+    "docker": "docker compose -f docker/compose.yml up"
+  },
+  "dependencies": {
+    "@monkeytype/schemas": "workspace:*",
+    "chalk": "4.1.2",
+    "cors": "2.8.5",
+    "dotenv": "16.4.5",
+    "express": "5.0.1",
+    "socket.io": "4.7.5",
+    "uuid": "10.0.0",
+    "winston": "3.6.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@monkeytype/oxlint-config": "workspace:*",
+    "@monkeytype/typescript-config": "workspace:*",
+    "@types/cors": "2.8.12",
+    "@types/express": "5.0.0",
+    "@types/node": "22.10.2",
+    "@types/uuid": "10.0.0",
+    "concurrently": "8.2.2",
+    "oxlint": "0.15.3",
+    "socket.io-client": "4.7.5",
+    "tsx": "4.16.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  },
+  "engines": {
+    "node": "24.11.0 || 22.21.0"
+  }
+}

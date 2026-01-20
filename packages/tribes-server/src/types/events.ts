@@ -1,0 +1,136 @@
+import type {
+  Room,
+  User,
+  UserProgress,
+  UserProgressOut,
+  Result,
+  RoomState,
+  MiniCrowns,
+  FinalPositions,
+  SystemStats,
+} from "./room.js";
+import type { RoomConfig } from "./config.js";
+
+// Client -> Server Events
+export type ClientToServerEvents = {
+  // System events
+  system_version_check: (
+    data: { version: string },
+    callback: (response: { status: string; version: string }) => void,
+  ) => void;
+  system_stats: (callback: (response: SystemStats) => void) => void;
+
+  // Room management events
+  room_create: (data: { config: RoomConfig; type?: string }) => void;
+  room_join: (
+    data: { roomId: string; fromBrowser: boolean },
+    callback: (response: { status?: string; room?: Room }) => void,
+  ) => void;
+  room_leave: () => void;
+  room_get_public_rooms: (
+    data: { page: number; search: string },
+    callback: (response: { rooms: Room[] }) => void,
+  ) => void;
+
+  // Race events
+  room_init_race: () => void;
+  room_ready_update: () => void;
+  room_progress_update: (data: UserProgressOut) => void;
+  room_result: (data: { result: Result }) => void;
+  room_back_to_lobby: () => void;
+
+  // Chat events
+  room_chat_message: (data: { message: string }) => void;
+  room_chatting_update: (data: { isChatting: boolean }) => void;
+
+  // Room config events (leader only)
+  room_update_config: (data: { config: RoomConfig }) => void;
+  room_toggle_visibility: () => void;
+  room_update_name: (data: { name: string }) => void;
+
+  // User management events (leader only)
+  room_ban_user: (data: { userId: string }) => void;
+  room_give_leader: (data: { userId: string }) => void;
+
+  // User status events
+  room_afk_update: (data: { isAfk: boolean }) => void;
+
+  // User events
+  user_set_name: (data: { name: string; confirm: boolean }) => void;
+
+  // Dev events
+  dev_room: () => void;
+};
+
+// Server -> Client Events
+export type ServerToClientEvents = {
+  // System events
+  system_notification: (data: {
+    message: string;
+    level?: number;
+    playMentionSound?: boolean;
+  }) => void;
+
+  // Room management events
+  room_joined: (data: { room: Room }) => void;
+  room_player_joined: (data: { user: User }) => void;
+  room_player_left: (data: { userId: string }) => void;
+  room_left: () => void;
+
+  // Room state events
+  room_state_changed: (data: { state: RoomState }) => void;
+  room_visibility_changed: (data: { isPrivate: boolean }) => void;
+  room_name_changed: (data: { name: string }) => void;
+  room_config_changed: (data: { config: RoomConfig }) => void;
+
+  // User status events
+  room_user_is_ready: (data: { userId: string }) => void;
+  room_user_afk_update: (data: { userId: string; isAfk: boolean }) => void;
+  room_leader_changed: (data: { userId: string }) => void;
+  room_chatting_changed: (data: {
+    userId: string;
+    isChatting: boolean;
+  }) => void;
+
+  // Chat events
+  room_chat_message: (data: {
+    message: string;
+    from?: User;
+    isSystem: boolean;
+  }) => void;
+
+  // Race events
+  room_init_race: (data: { seed: number }) => void;
+  room_countdown: (data: { time: number }) => void;
+  room_race_started: () => void;
+  room_progress_update: (data: {
+    users: Record<string, UserProgress>;
+    roomMaxRaw: number;
+    roomMaxWpm: number;
+    roomMinRaw: number;
+    roomMinWpm: number;
+  }) => void;
+  room_users_update: (data: Record<string, User>) => void;
+  room_user_result: (data: { userId: string; result?: Result }) => void;
+  room_finishTimer_countdown: (data: { time: number }) => void;
+  room_readyTimer_countdown: (data: { time: number }) => void;
+  room_readyTimer_over: () => void;
+  room_back_to_lobby: () => void;
+  room_final_positions: (data: {
+    positions: FinalPositions;
+    miniCrowns: MiniCrowns;
+  }) => void;
+  room_race_force_finish: (data: { reason: string }) => void;
+
+  // User events
+  user_update_name: (data: { name: string }) => void;
+};
+
+// Inter-server events (none for now)
+export type InterServerEvents = Record<string, never>;
+
+// Socket data
+export type SocketData = {
+  name: string;
+  roomId?: string;
+};
