@@ -16,6 +16,9 @@ export function init(page: string): void {
   }
 
   const room = TribeState.getRoom();
+  console.debug("Hello from tribe-bars init");
+  console.debug("Room data:", room);
+  console.debug("Element found:", el);
 
   if (!el) return;
   if (!room) return;
@@ -94,6 +97,10 @@ export function init(page: string): void {
 
 export function show(page: string): void {
   if (page === "test") {
+    console.debug("Hello from tribe-bars show");
+    console.debug("Showing tribe bars on test page");
+    let tel = $("#typeingTest");
+    console.debug("Typing test element:", tel);
     $(".pageTest #typingTest .tribeBars").removeClass("hidden");
   } else if (page === "tribe") {
     $(".pageTribe .tribeBars").removeClass("hidden");

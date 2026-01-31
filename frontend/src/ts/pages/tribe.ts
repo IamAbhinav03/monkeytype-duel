@@ -7,6 +7,32 @@ import { CLIENT_STATE } from "../tribe/types";
 import tribeSocket from "../tribe/tribe-socket";
 import * as TribePagePreloader from "../tribe/pages/tribe-page-preloader";
 
+/**
+ * Tribe page configuration and lifecycle management.
+ * Existing code, explaned using AI
+ *
+ * Handles the initialization and navigation flow for the tribe/multiplayer section.
+ *
+ * @remarks
+ * - `beforeHide`: Executed immediately before the page is hidden from view. Use for cleanup
+ *   that should occur before the page becomes invisible but while it's still in the DOM.
+ * - `beforeShow`: Executed immediately before the page is shown to the user. Use for setup
+ *   that must occur before rendering, such as loading data or initializing state.
+ *
+ * Key differences:
+ * - `beforeHide` runs when navigating AWAY from the tribe page
+ * - `beforeShow` runs when navigating TO the tribe page
+ * - `beforeShow` restores chat state if the user is already in a room
+ * - `afterHide` performs full cleanup (socket disconnect, preloader reset)
+ * - `afterShow` initializes the tribe module if disconnected
+ *
+ * @example
+ * // Page lifecycle order:
+ * // 1. beforeShow (when entering tribe page)
+ * // 2. afterShow (after page is rendered)
+ * // 3. beforeHide (when leaving tribe page)
+ * // 4. afterHide (after page is hidden)
+ */
 export const page = new Page({
   id: "tribe",
   element: qsr(".page.pageTribe"),
@@ -31,6 +57,8 @@ export const page = new Page({
   },
   afterShow: async () => {
     if (TribeState.getState() === CLIENT_STATE.DISCONNECTED) {
+      console.debug("Hello from route-controller /tribe afterShow");
+      console.debug("TribeState is disconnected, initializing Tribe");
       void Tribe.init();
     }
   },
