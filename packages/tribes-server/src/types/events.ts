@@ -12,6 +12,38 @@ import type {
 import type { RoomConfig } from "./config.js";
 
 // Client -> Server Events
+/**
+ * Represents all events that can be emitted from the client to the server.
+ *
+ * @system_version_check - Checks if the client version matches the server version
+ * @system_stats - Retrieves current system statistics from the server
+ *
+ * @room_create - Creates a new room with the specified configuration
+ * @room_join - Joins an existing room by ID
+ * @room_leave - Leaves the current room
+ * @room_get_public_rooms - Fetches paginated list of public rooms with optional search filter
+ *
+ * @room_init_race - Initializes a new race in the current room
+ * @room_ready_update - Notifies the server that the user is ready to start the race. The server will update the user's ready status and may trigger race start when all users are ready.
+ * @room_progress_update - Sends the user's real-time progress during an active race (WPM, accuracy, etc.)
+ * @room_result - Submits the user's final race result after completion
+ * @room_back_to_lobby - Signals the user's intent to return to the lobby after a race
+ *
+ * @room_chat_message - Sends a chat message to all users in the room
+ * @room_chatting_update - Updates the server on whether the user is currently typing a message
+ *
+ * @room_update_config - Updates room configuration (leader only)
+ * @room_toggle_visibility - Toggles room visibility between public and private (leader only)
+ * @room_update_name - Updates the room's display name (leader only)
+ *
+ * @room_ban_user - Removes a user from the room (leader only)
+ * @room_give_leader - Transfers leadership to another user (leader only)
+ *
+ * @room_afk_update - Updates the server on the user's AFK (away from keyboard) status
+ * @user_set_name - Sets or updates the user's display name
+ *
+ * @dev_room - Developer utility for creating a test room
+ */
 export type ClientToServerEvents = {
   // System events
   system_version_check: (
@@ -84,7 +116,7 @@ export type ServerToClientEvents = {
   room_config_changed: (data: { config: RoomConfig }) => void;
 
   // User status events
-  room_user_is_ready: (data: { userId: string }) => void;
+  room_user_is_ready: (data: { userId: string; isReady: boolean }) => void;
   room_user_afk_update: (data: { userId: string; isAfk: boolean }) => void;
   room_leader_changed: (data: { userId: string }) => void;
   room_chatting_changed: (data: {

@@ -121,7 +121,10 @@ export function toggleReady(io: TribesServer, socket: TribesSocket): void {
   if (!user) return;
 
   user.isReady = !user.isReady;
-  io.to(room.id).emit("room_user_is_ready", { userId: socket.id });
+  io.to(room.id).emit("room_user_is_ready", {
+    userId: socket.id,
+    isReady: user.isReady,
+  });
 }
 
 export function updateAfk(
