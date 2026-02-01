@@ -533,7 +533,12 @@ TribeSocket.in.room.configChanged(async (data) => {
 TribeSocket.in.room.initRace((data) => {
   const room = TribeState.getRoom();
   updateRoomState(TribeTypes.ROOM_STATE.RACE_INIT);
-  if (TribeState.getSelf()?.isTyping) {
+  const self: TribeTypes.User | undefined = TribeState.getSelf();
+  // @IamAbhinav03
+  // Might lead to a bug if the leader is not participating but others are.
+  // Needs testing.
+  const isParticipating = self?.isLeader ?? self?.isReady;
+  if (isParticipating) {
     TribeResults.init("result");
     console.debug("Initializing TribeBars for test page");
     TribeBars.init("test");

@@ -99,7 +99,7 @@ export function show(page: string): void {
   if (page === "test") {
     console.debug("Hello from tribe-bars show");
     console.debug("Showing tribe bars on test page");
-    let tel = $("#typeingTest");
+    let tel = $("#typingTest");
     console.debug("Typing test element:", tel);
     $(".pageTest #typingTest .tribeBars").removeClass("hidden");
   } else if (page === "tribe") {
