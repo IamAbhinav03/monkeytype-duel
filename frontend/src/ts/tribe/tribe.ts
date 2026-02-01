@@ -194,6 +194,8 @@ export function joinRoom(roomId: string, fromBrowser = false): void {
 export function initRace(): void {
   let everyoneReady = true;
   const room = TribeState.getRoom();
+  console.debug("Hello from tribe.ts initRace");
+  console.debug("initRace called, room:", room);
   if (room?.users) {
     for (const user of Object.values(room.users)) {
       if (user.isLeader || user.isAfk) continue;
@@ -202,6 +204,7 @@ export function initRace(): void {
       }
     }
   }
+  console.debug("Everyone ready:", everyoneReady);
   if (everyoneReady) {
     TribeSocket.out.room.init();
   } else {
@@ -530,9 +533,16 @@ TribeSocket.in.room.configChanged(async (data) => {
 TribeSocket.in.room.initRace((data) => {
   const room = TribeState.getRoom();
   updateRoomState(TribeTypes.ROOM_STATE.RACE_INIT);
-  if (TribeState.getSelf()?.isTyping) {
+  const self: TribeTypes.User | undefined = TribeState.getSelf();
+  // @IamAbhinav03
+  // Might lead to a bug if the leader is not participating but others are.
+  // Needs testing.
+  const isParticipating = self?.isLeader ?? self?.isReady;
+  if (isParticipating) {
     TribeResults.init("result");
+    console.debug("Initializing TribeBars for test page");
     TribeBars.init("test");
+    console.debug("Showing TribeBars for test page");
     TribeBars.show("test");
   } else {
     //TODO update lobby bars

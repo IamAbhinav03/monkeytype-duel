@@ -49,6 +49,29 @@ const route404: Route = {
   },
 };
 
+/**
+ * Application routes configuration.
+ *
+ * Defines all available routes and their corresponding page load handlers.
+ * Each route includes path matching and async page controller transitions.
+ *
+ * Routes include:
+ * - `/` - Test page (home), with tribe mode awareness and navigation logic
+ * - `/verify` - Test verification page
+ * - `/leaderboards` - Leaderboards page
+ * - `/about` - About page
+ * - `/settings` - Settings page
+ * - `/login` - Login page (redirects if already authenticated or auth unavailable)
+ * - `/account` - User account page (requires authentication)
+ * - `/account-settings` - Account settings page (requires authentication)
+ * - `/profile` - Profile search page
+ * - `/profile/:uidOrName` - Individual user profile page
+ * - `/friends` - Friends page (requires authentication)
+ * - `/tribe` - Tribe/multiplayer room page (requires tribe mode enabled)
+ * - `/tribe/:roomId` - Tribe room with auto-join functionality
+ *
+ * @type {Route[]}
+ */
 const routes: Route[] = [
   {
     path: "/",
@@ -194,7 +217,9 @@ const routes: Route[] = [
         });
         return;
       }
-
+      console.debug("Hello from route-controller /tribe");
+      console.debug("TribeState.isInARoom(): ", TribeState.isInARoom());
+      console.debug("TribeState.getRoomState(): ", TribeState.getRoomState());
       if (
         TribeState.getSelf()?.isLeader &&
         TribeState.getRoomState() === ROOM_STATE.READY_TO_CONTINUE
