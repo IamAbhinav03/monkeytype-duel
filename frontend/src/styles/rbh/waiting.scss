@@ -1,0 +1,85 @@
+.pageWaiting {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+
+  .waitingContainer {
+    display: grid;
+    gap: 3rem;
+    justify-items: center;
+    text-align: center;
+
+    #waitingMonkey {
+      width: 308px;
+      height: 200px;
+      margin: 0 auto;
+      position: relative;
+      // Removed bounce animation from container
+
+      div {
+        height: 200px;
+        width: 308px;
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+
+      .up {
+        background-image: url("/images/monkey/m3.png");
+        animation: monkeyCycle 0.6s step-end infinite;
+      }
+
+      .left {
+        background-image: url("/images/monkey/m1.png");
+      }
+
+      .right {
+        background-image: url("/images/monkey/m2.png");
+      }
+
+      .both {
+        background-image: url("/images/monkey/m4.png");
+      }
+
+      .fast {
+        opacity: 0;
+
+        .up {
+          background-image: url("/images/monkey/m3_fast.png");
+        }
+
+        .left {
+          background-image: url("/images/monkey/m1_fast.png");
+        }
+
+        .right {
+          background-image: url("/images/monkey/m2_fast.png");
+        }
+
+        .both {
+          background-image: url("/images/monkey/m4_fast.png");
+        }
+      }
+    }
+
+    .message {
+      font-size: 2rem;
+      color: var(--main-color);
+      font-style: normal; // Ensure text is not slanted
+      transform: none;
+    }
+  }
+}
+
+// Cycle between m3 (up) and m4 (both) images
+@keyframes monkeyCycle {
+  0%,
+  49% {
+    background-image: url("/images/monkey/m3.png");
+  }
+  50%,
+  100% {
+    background-image: url("/images/monkey/m4.png");
+  }
+}
