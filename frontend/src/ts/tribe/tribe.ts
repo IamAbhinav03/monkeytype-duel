@@ -440,7 +440,7 @@ TribeSocket.in.room.nameChanged((data) => {
 TribeSocket.in.room.userIsReady((data) => {
   const room = TribeState.getRoom();
   if (!room) return;
-  (room.users[data.userId] as TribeTypes.User).isReady = true;
+  (room.users[data.userId] as TribeTypes.User).isReady = data.isReady;
   TribeUserList.update();
   TribeButtons.update();
 });
@@ -531,13 +531,41 @@ TribeSocket.in.room.configChanged(async (data) => {
 
 // socket.on("room_init_race", (e) => {
 TribeSocket.in.room.initRace((data) => {
+  // @IamAbhinav03
+  // Sorry for the stupid as long conditionals and logs
+  // had to satisfy the stupid linter rules and
+  // didn't want to deal with the consfusing shitty ?? operator in js
   const room = TribeState.getRoom();
   updateRoomState(TribeTypes.ROOM_STATE.RACE_INIT);
-  const self: TribeTypes.User | undefined = TribeState.getSelf();
-  // @IamAbhinav03
-  // Might lead to a bug if the leader is not participating but others are.
-  // Needs testing.
-  const isParticipating = self?.isLeader ?? self?.isReady;
+
+  if (!room) {
+    console.debug("initRace: room is undefined");
+    return;
+  }
+
+  const self = room.users[TribeSocket.getId()];
+
+  console.debug("Hello from tribe.ts initRace socket event");
+  console.debug("self:", self);
+
+  if (!self) {
+    console.debug("initRace: self is undefined");
+    return;
+  }
+
+  console.debug("isLeader:", self.isLeader);
+  console.debug("isReady:", self.isReady);
+
+  let isParticipating: boolean;
+
+  if (self.isLeader || self.isReady) {
+    isParticipating = true;
+  } else {
+    isParticipating = false;
+  }
+
+  console.debug("isParticipating:", isParticipating);
+
   if (isParticipating) {
     TribeResults.init("result");
     console.debug("Initializing TribeBars for test page");
@@ -555,7 +583,7 @@ TribeSocket.in.room.initRace((data) => {
     TribeBars.show("tribe");
     return;
   }
-  if (room) room.seed = data.seed;
+  if (room !== undefined) room.seed = data.seed;
   Random.setSeed(TribeState.getRoom()?.seed.toString() ?? "");
   NavigationEvent.dispatch("/", {
     tribeOverride: true,

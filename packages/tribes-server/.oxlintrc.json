@@ -1,4 +1,0 @@
-{
-  "ignorePatterns": ["node_modules", "dist", ".turbo"],
-  "extends": ["../oxlint-config/index.jsonc"]
-}
