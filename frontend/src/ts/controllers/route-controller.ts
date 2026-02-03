@@ -164,6 +164,12 @@ const routes: Route[] = [
     },
   },
   {
+    path: "/rbh/leaderboard",
+    load: async (_params, options) => {
+      await PageController.change("rbhLeaderboard", options);
+    },
+  },
+  {
     path: "/account",
     load: async (_params, options) => {
       if (!isAuthAvailable()) {

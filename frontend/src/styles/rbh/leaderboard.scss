@@ -1,0 +1,138 @@
+.pageRbhLeaderboard {
+  .content {
+    display: grid;
+    gap: 2rem;
+    // Removed side buttons column, full width
+    grid-template-columns: 1fr;
+    height: 100%;
+
+    .bigtitle {
+      font-size: 2em;
+      margin-bottom: 1em;
+      .text {
+        grid-area: text;
+        color: var(--main-color);
+      }
+    }
+
+    .tableAndUser {
+      font-size: 1rem;
+
+      & > .divider {
+        height: 0.25rem;
+        width: 100%;
+        background: var(--sub-alt-color);
+        border-radius: calc(var(--roundness) / 2);
+        margin-bottom: 2em;
+      }
+
+      .narrow {
+        display: none;
+      }
+
+      table {
+        width: 100%;
+        border-spacing: 0;
+        border-collapse: collapse;
+
+        --padding: 1em 1.5rem;
+
+        .sub {
+          opacity: 0.5;
+        }
+
+        td {
+          padding: var(--padding);
+        }
+
+        .globalRank {
+          i {
+            display: none;
+          }
+          span {
+            display: inline;
+          }
+        }
+
+        td:first-child {
+          width: 0;
+          text-align: center;
+        }
+
+        thead {
+          color: var(--sub-color);
+          font-size: 0.75em;
+
+          td {
+            &.stat {
+              width: 15ch;
+              text-align: right;
+            }
+            &.date {
+              width: 1px;
+              text-align: right;
+            }
+          }
+        }
+
+        .avatarNameBadge {
+          display: grid;
+          grid-template-columns: max-content max-content auto;
+          gap: 0.5em;
+          place-items: center left;
+          .avatar .userIcon {
+            color: var(--sub-color);
+          }
+          .name {
+            color: var(--text-color);
+            font-weight: 500;
+          }
+          .avatar {
+            --size: 1.125em;
+          }
+        }
+
+        tbody {
+          color: var(--text-color);
+
+          td.stat {
+            text-align: right;
+          }
+
+          td.date {
+            text-wrap-mode: nowrap;
+            text-align: right;
+            font-size: 0.75em;
+          }
+
+          tr:nth-child(odd) td {
+            background: var(--sub-alt-color);
+          }
+          td:nth-child(1) {
+            border-radius: calc(var(--roundness) / 2) 0 0
+              calc(var(--roundness) / 2);
+          }
+          td:last-child {
+            border-radius: 0 calc(var(--roundness) / 2)
+              calc(var(--roundness) / 2) 0;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 800px) {
+  .pageRbhLeaderboard {
+    .content {
+      .tableAndUser {
+        .wide {
+          display: none;
+        }
+        .narrow {
+          display: table-cell;
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,7 @@ import * as PageOtp from "../pages/rbh/otp";
 import * as PageWaiting from "../pages/rbh/waiting";
 import * as PageRbhProfile from "../pages/rbh/profile";
 import * as PageRbhLoadingScreen from "../pages/rbh/loading-screen";
+import * as PageRbhLeaderboard from "../pages/rbh/leaderboard";
 import * as PageLoading from "../pages/loading";
 import * as PageTribe from "../pages/tribe";
 import * as PageProfile from "../pages/profile";
@@ -199,6 +200,7 @@ export async function change(
     waiting: PageWaiting.page,
     rbhProfile: PageRbhProfile.page,
     rbhLoadingScreen: PageRbhLoadingScreen.page,
+    rbhLeaderboard: PageRbhLeaderboard.page,
     tribe: PageTribe.page,
     profile: PageProfile.page,
     profileSearch: PageProfileSearch.page,
