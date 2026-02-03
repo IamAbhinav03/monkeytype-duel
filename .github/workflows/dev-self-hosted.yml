@@ -1,5 +1,6 @@
 name: Deploy with Docker Compose
 
+# This is so that reviewers can view before merging PRs
 on:
   pull_request:
     branches: ["dev"]
