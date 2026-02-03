@@ -1,8 +1,12 @@
 name: Deploy with Docker Compose
 
 on:
-  push:
-    branches: ["dev", "master", "rbh-auth", "tribes-included"]
+  pull_request:
+    branches: ["dev"]
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 jobs:
   deploy:
