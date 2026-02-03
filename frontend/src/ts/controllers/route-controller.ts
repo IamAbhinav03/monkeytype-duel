@@ -140,30 +140,6 @@ const routes: Route[] = [
     },
   },
   {
-    path: "/otp",
-    load: async (_params, options) => {
-      await PageController.change("otp", options);
-    },
-  },
-  {
-    path: "/waiting",
-    load: async (_params, options) => {
-      await PageController.change("waiting", options);
-    },
-  },
-  {
-    path: "/rbh/profile",
-    load: async (_params, options) => {
-      await PageController.change("rbhProfile", options);
-    },
-  },
-  {
-    path: "/rbh/loading-screen",
-    load: async (_params, options) => {
-      await PageController.change("rbhLoadingScreen", options);
-    },
-  },
-  {
     path: "/account",
     load: async (_params, options) => {
       if (!isAuthAvailable()) {
