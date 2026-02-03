@@ -1,8 +1,13 @@
 name: Deploy with Docker Compose
 
+# This is so that reviewers can view before merging PRs
 on:
-  push:
-    branches: ["dev", "master", "rbh-auth", "tribes-included"]
+  pull_request:
+    branches: ["dev"]
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 jobs:
   deploy:
