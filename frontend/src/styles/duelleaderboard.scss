@@ -5,11 +5,14 @@
     align-items: center;
     gap: 1.5rem;
     padding: 2rem;
+    box-shadow: none !important;
 
     .bigtitle {
-      font-size: 1.5rem;
+      font-size: 3rem;
       .text {
         color: var(--text-color);
+        font-size: inherit;
+        font-weight: 700;
       }
     }
 
