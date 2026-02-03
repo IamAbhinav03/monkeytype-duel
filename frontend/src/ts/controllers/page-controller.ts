@@ -13,6 +13,7 @@ import * as PageProfileSearch from "../pages/profile-search";
 import * as Friends from "../pages/friends";
 import * as Page404 from "../pages/404";
 import * as PageLeaderboards from "../pages/leaderboards";
+import * as PageDuelleaderboard from "../pages/duelleaderboard";
 import * as PageAccountSettings from "../pages/account-settings";
 import * as PageTransition from "../states/page-transition";
 import * as AdController from "../controllers/ad-controller";
@@ -198,6 +199,7 @@ export async function change(
     404: Page404.page,
     accountSettings: PageAccountSettings.page,
     leaderboards: PageLeaderboards.page,
+    duelleaderboard: PageDuelleaderboard.page,
   };
 
   const previousPage = pages[ActivePage.get()];

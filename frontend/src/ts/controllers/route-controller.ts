@@ -114,6 +114,12 @@ const routes: Route[] = [
     },
   },
   {
+    path: "/duelleaderboard",
+    load: async (_params, options) => {
+      await PageController.change("duelleaderboard", options);
+    },
+  },
+  {
     path: "/about",
     load: async (_params, options) => {
       await PageController.change("about", options);

@@ -36,6 +36,7 @@ import "./input/listeners";
 import "./ready";
 import "./controllers/route-controller";
 import "./pages/about";
+import "./pages/duelleaderboard";
 import "./elements/scroll-to-top";
 import * as Account from "./pages/account";
 import "./elements/no-css";
