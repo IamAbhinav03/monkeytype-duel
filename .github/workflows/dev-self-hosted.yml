@@ -35,6 +35,13 @@ jobs:
           FIREBASE_APPID=${{ secrets.FIREBASE_APPID }}
           EOF
 
+      - name: Create frontend .env file
+        run: |
+          rm -f frontend/.env
+          cat > frontend/.env << EOF
+          FORCE_TRIBE=true
+          EOF
+
       - name: Deploy to dev
         run: |
           docker compose -f docker/docker-compose.yml up -d --build
