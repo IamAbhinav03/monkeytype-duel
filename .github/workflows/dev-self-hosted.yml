@@ -17,6 +17,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Create .env file
+        run: |
+          rm -f docker/.env
+          cat > docker/.env << EOF
+          HTTP_PORT=8080
+          BACKEND_PORT=5005
+          MONKEYTYPE_FRONTENDURL=https://monkeytype-test.rbh.makerspace.tools
+          MONKEYTYPE_BACKENDURL=https://api.monkeytype-test.rbh.makerspace.tools
+          RECAPTCHA_SITE_KEY=${{ secrets.RECAPTCHA_SITE_KEY }}
+          RECAPTCHA_SECRET=${{ secrets.RECAPTCHA_SECRET }}
+          FIREBASE_APIKEY=${{ secrets.FIREBASE_APIKEY }}
+          FIREBASE_AUTHDOMAIN=${{ secrets.FIREBASE_AUTHDOMAIN }}
+          FIREBASE_PROJECTID=${{ secrets.FIREBASE_PROJECTID }}
+          FIREBASE_STORAGEBUCKET=${{ secrets.FIREBASE_STORAGEBUCKET }}
+          FIREBASE_MESSAGINGSENDERID=${{ secrets.FIREBASE_MESSAGINGSENDERID }}
+          FIREBASE_APPID=${{ secrets.FIREBASE_APPID }}
+          EOF
+
       - name: Deploy to dev
         run: |
           docker compose -f docker/docker-compose.yml up -d --build
