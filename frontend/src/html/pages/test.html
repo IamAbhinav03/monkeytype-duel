@@ -2,19 +2,17 @@
   <div id="testConfig" class="full-width">
     <div class="row">
       <div class="puncAndNum">
-        <button class="textButton punctuationMode">
+        <button class="textButton punctuationMode" disabled>
           <i class="fas fa-fw fa-at"></i>
           punctuation
         </button>
-        <button class="textButton numbersMode">
+        <button class="textButton numbersMode" disabled>
           <i class="fas fa-fw fa-hashtag"></i>
           numbers
         </button>
       </div>
-
       <div class="spacer leftSpacer"></div>
-
-      <div class="mode">
+      <div class="mode hidden">
         <button class="textButton" mode="time">
           <i class="fas fa-fw fa-clock"></i>
           time
@@ -36,25 +34,37 @@
           custom
         </button>
       </div>
-
       <div class="spacer rightSpacer"></div>
-
       <div class="time">
-        <button class="textButton" timeConfig="15"><span>15</span></button>
+        <button class="textButton" timeConfig="15" disabled>
+          <span>15</span>
+        </button>
         <button class="textButton" timeConfig="30"><span>30</span></button>
-        <button class="textButton" timeConfig="60"><span>60</span></button>
-        <button class="textButton" timeConfig="120"><span>120</span></button>
-        <button class="textButton" timeConfig="custom">
+        <button class="textButton" timeConfig="60" disabled>
+          <span>60</span>
+        </button>
+        <button class="textButton" timeConfig="120" disabled>
+          <span>120</span>
+        </button>
+        <button class="textButton" timeConfig="custom" disabled>
           <i class="fas fa-fw fa-tools"></i>
         </button>
       </div>
 
       <div class="wordCount">
-        <button class="textButton" wordCount="10"><span>10</span></button>
-        <button class="textButton" wordCount="25"><span>25</span></button>
-        <button class="textButton" wordCount="50"><span>50</span></button>
-        <button class="textButton" wordCount="100"><span>100</span></button>
-        <button class="textButton" wordCount="custom">
+        <button class="textButton" wordCount="10" disabled>
+          <span>10</span>
+        </button>
+        <button class="textButton" wordCount="25" disabled>
+          <span>25</span>
+        </button>
+        <button class="textButton" wordCount="50" disabled>
+          <span>50</span>
+        </button>
+        <button class="textButton" wordCount="100" disabled>
+          <span>100</span>
+        </button>
+        <button class="textButton" wordCount="custom" disabled>
           <i class="fas fa-fw fa-tools"></i>
         </button>
       </div>
@@ -116,6 +126,7 @@
       </button>
     </div>
   </div>
+
   <div id="typingTest" class="content-grid full-width-padding">
     <div class="tribeBars hidden"></div>
     <div id="capsWarning" class="hidden">
@@ -124,7 +135,7 @@
     </div>
     <div id="memoryTimer">Time left to memorise all words: 0s</div>
     <div id="layoutfluidTimer">Time left to memorise all words: 0s</div>
-    <div id="testModesNotice"></div>
+    <div id="testModesNotice" class="hidden"></div>
     <div id="liveStatsTextTop" class="timerMain">
       <div class="wrapper">
         <div class="timerProgress hidden">1:00</div>
@@ -176,14 +187,14 @@
 
     <div id="keymap" class="hidden"></div>
 
-    <button
-      id="restartTestButton"
-      aria-label="Restart Test"
-      data-balloon-pos="down"
-      class="text"
-    >
-      <i class="fas fa-fw fa-redo-alt"></i>
-    </button>
+    <!-- <button -->
+    <!--   id="restartTestButton" -->
+    <!--   aria-label="Restart Test" -->
+    <!--   data-balloon-pos="down" -->
+    <!--   class="text hidden" -->
+    <!-- > -->
+    <!--   <i class="fas fa-fw fa-redo-alt"></i> -->
+    <!-- </button> -->
     <div id="liveStatsTextBottom" class="timerMain">
       <div class="wrapper">
         <div class="liveSpeed hidden">123</div>
