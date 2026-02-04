@@ -19,8 +19,17 @@ jobs:
     runs-on: [self-hosted, dev-rbh-amay]
 
     steps:
+      - name: Ensure workspace writable
+        run: |
+          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
+          if [ -d "$GITHUB_WORKSPACE/.git" ]; then
+            git -C "$GITHUB_WORKSPACE" clean -fdx || true
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Deploy to dev
         run: |
@@ -31,8 +40,17 @@ jobs:
     runs-on: [self-hosted, prod-rbh-duel]
 
     steps:
+      - name: Ensure workspace writable
+        run: |
+          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
+          if [ -d "$GITHUB_WORKSPACE/.git" ]; then
+            git -C "$GITHUB_WORKSPACE" clean -fdx || true
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Deploy to prod
         run: |
