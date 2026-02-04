@@ -1,6 +1,6 @@
 name: Deploy with Docker Compose
 
-# This is so that reviewers can view before merging PRs
+# This is so that reviewers can view before merging PRs (dev) and promote to prod on close
 on:
   pull_request:
     branches: ["dev"]
@@ -8,15 +8,32 @@ on:
       - opened
       - synchronize
       - reopened
+  pull_request_target:
+    branches: ["prod-internal"]
+    types:
+      - closed
 
 jobs:
-  deploy:
-    runs-on: self-hosted
+  deploy-dev:
+    if: github.event.pull_request.base.ref == 'dev'
+    runs-on: [self-hosted, dev-rbh-amay]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy
+      - name: Deploy to dev
+        run: |
+          docker compose -f docker/docker-compose.yml up -d --build
+
+  deploy-prod:
+    if: github.event.pull_request.base.ref == 'prod-internal'
+    runs-on: [self-hosted, prod-rbh-duel]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to prod
         run: |
           docker compose -f docker/docker-compose.yml up -d --build
