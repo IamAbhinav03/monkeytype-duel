@@ -1,0 +1,20 @@
+name: Deploy to Prod
+
+on:
+  pull_request_target:
+    branches: ["prod-internal"]
+    types:
+      - closed
+
+jobs:
+  deploy-prod:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'prod-internal'
+    runs-on: [self-hosted, prod-rbh-duel]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to prod
+        run: |
+          docker compose -f docker/docker-compose.yml up -d --build

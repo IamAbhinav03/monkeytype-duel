@@ -8,16 +8,9 @@ on:
       - synchronize
       - reopened
 
-  pull_request_target:
-    branches: ["prod-internal"]
-    types:
-      - closed
-
 jobs:
   deploy-dev:
-    if: >
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.base.ref == 'dev'
+    if: github.event.pull_request.base.ref == 'dev'
     runs-on: [self-hosted, dev-rbh-amay]
 
     steps:
@@ -27,22 +20,3 @@ jobs:
       - name: Deploy to dev
         run: |
           docker compose -f docker/docker-compose.yml up -d --build
-
-  deploy-prod:
-    if: >
-      github.event_name == 'pull_request_target' &&
-      github.event.pull_request.base.ref == 'prod-internal' &&
-      github.event.pull_request.merged == true
-    runs-on: [self-hosted, prod-rbh-duel]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          # IMPORTANT: deploy the final state of prod-internal
-          ref: prod-internal
-
-      - name: Deploy to prod
-        run: |
-          docker compose -f docker/docker-compose.yml up -d --build
-
