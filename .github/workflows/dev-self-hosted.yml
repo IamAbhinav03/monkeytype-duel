@@ -1,6 +1,5 @@
 name: Deploy with Docker Compose
 
-# This is so that reviewers can view before merging PRs (dev) and promote to prod on close
 on:
   pull_request:
     branches: ["dev"]
@@ -8,6 +7,7 @@ on:
       - opened
       - synchronize
       - reopened
+
   pull_request_target:
     branches: ["prod-internal"]
     types:
@@ -15,7 +15,9 @@ on:
 
 jobs:
   deploy-dev:
-    if: github.event.pull_request.base.ref == 'dev'
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.base.ref == 'dev'
     runs-on: [self-hosted, dev-rbh-amay]
 
     steps:
@@ -27,16 +29,20 @@ jobs:
           docker compose -f docker/docker-compose.yml up -d --build
 
   deploy-prod:
-    if: github.event.pull_request.base.ref == 'prod-internal'
-    runs-on: [self-hosted, prod-rbh-duel] # Update the label in runner settings to prod-rbh-duel
+    if: >
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.base.ref == 'prod-internal' &&
+      github.event.pull_request.merged == true
+    runs-on: [self-hosted, prod-rbh-duel]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # On PR close the refs/pull/* merge ref may be gone; deploy from the target branch itself
-          ref: ${{ github.event.pull_request.base.ref }}
+          # IMPORTANT: deploy the final state of prod-internal
+          ref: prod-internal
 
       - name: Deploy to prod
         run: |
           docker compose -f docker/docker-compose.yml up -d --build
+
