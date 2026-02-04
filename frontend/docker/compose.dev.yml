@@ -7,8 +7,7 @@ services:
         FROM node:24.11.0
         RUN npm i -g pnpm@9.6.0
         RUN mkdir /pnpm-store && chown -R 1000:1000 /pnpm-store
-    user: "node" ##this works as long as your local user has uid=1000
-    # restart: on-failure
+    # user: "node"
     environment:
       - SERVER_OPEN=false
       - BACKEND_URL=http://localhost:${DOCKER_SERVER_PORT:-5005}
@@ -16,9 +15,12 @@ services:
       - "${DOCKER_HTTP_PORT:-3000}:3000"
     volumes:
       - ../../:/monkeytype
-    entrypoint: 'bash -c "echo starting, this may take a while... \
-      && cd /monkeytype \
+      - /monkeytype/node_modules # 👈 THIS LINE FIXES IT
+    entrypoint: >
+      bash -c "
+      echo starting, this may take a while...
+      && cd /monkeytype
       && pnpm config set store-dir /pnpm-store
-      && pnpm i \
-      && export SERVER_OPEN=false \
-      && npm run dev-fe"'
+      && pnpm install
+      && npm run dev-fe
+      "

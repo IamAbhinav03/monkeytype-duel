@@ -9,6 +9,7 @@
 
     .bigtitle {
       font-size: 3rem;
+
       .text {
         color: var(--text-color);
         font-size: inherit;
@@ -31,37 +32,56 @@
 
     .duelLeaderboard {
       display: flex;
-      align-items: center;
+      align-items: stretch;
+      justify-content: center;
       gap: 2rem;
       margin-top: 1rem;
+      width: 100%;
+      max-width: 1000px;
     }
 
     .player {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.25rem;
-      padding: 1rem 1.25rem;
+      justify-content: center;
+      gap: 1rem;
+      padding: 2rem 2.5rem;
       background: var(--bg-color);
-      border-radius: var(--roundness);
-      border: 1px solid var(--sub-alt-color);
-      min-width: 200px;
+      border-radius: calc(var(--roundness) * 1.5);
+      border: 2px solid var(--sub-alt-color);
+      flex: 1;
+      max-width: 40%;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      transition:
+        transform 0.3s ease,
+        box-shadow 0.3s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      }
 
       .name {
-        font-weight: 600;
+        font-weight: 700;
+        font-size: 1.75rem;
         color: var(--main-color);
+        text-align: center;
       }
 
       .wpm {
-        font-size: 1.25rem;
+        font-size: 3rem;
+        font-weight: 800;
         color: var(--text-color);
+        letter-spacing: -0.02em;
       }
     }
 
     .leaderArrow {
-      font-size: 1.5rem;
+      font-size: 2.5rem;
       color: var(--main-color);
       transition: transform 0.3s ease;
+      align-self: center;
     }
   }
 }
