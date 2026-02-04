@@ -21,7 +21,8 @@ jobs:
     steps:
       - name: Ensure workspace writable
         run: |
-          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
+          sudo -n chown -R "$USER":"$USER" "$GITHUB_WORKSPACE" 2>/dev/null || true
+          chmod -R u+rw "$GITHUB_WORKSPACE" || true
           if [ -d "$GITHUB_WORKSPACE/.git" ]; then
             git -C "$GITHUB_WORKSPACE" clean -fdx || true
           fi
@@ -42,7 +43,8 @@ jobs:
     steps:
       - name: Ensure workspace writable
         run: |
-          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
+          sudo -n chown -R "$USER":"$USER" "$GITHUB_WORKSPACE" 2>/dev/null || true
+          chmod -R u+rw "$GITHUB_WORKSPACE" || true
           if [ -d "$GITHUB_WORKSPACE/.git" ]; then
             git -C "$GITHUB_WORKSPACE" clean -fdx || true
           fi
