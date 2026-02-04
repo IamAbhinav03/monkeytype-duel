@@ -28,7 +28,7 @@ jobs:
 
   deploy-prod:
     if: github.event.pull_request.base.ref == 'prod-internal'
-    runs-on: [self-hosted, prod-rbh-duel]
+    runs-on: [self-hosted, prod-rbh-duel] # Update the label in runner settings to prod-rbh-duel
 
     steps:
       - name: Checkout code
