@@ -42,9 +42,19 @@
       "env": ["BACKEND_URL", "RECAPTCHA_SITE_KEY", "SENTRY", "FORCE_TRIBE"],
       "outputs": ["dist/**"]
     },
+    "@monkeytype/frontend#build-tribedev": {
+      "dependsOn": ["^build"],
+      "env": ["BACKEND_URL", "RECAPTCHA_SITE_KEY", "SENTRY", "FORCE_TRIBE"],
+      "outputs": ["dist/**"]
+    },
     "@monkeytype/frontend#dev": {
       "dependsOn": ["^build"],
-      "env": ["BACKEND_URL", "RECAPTCHA_SITE_KEY", "SERVER_OPEN"],
+      "env": [
+        "BACKEND_URL",
+        "RECAPTCHA_SITE_KEY",
+        "SERVER_OPEN",
+        "FORCE_TRIBE"
+      ],
       "persistent": true
     },
     "@monkeytype/backend#dev": {
