@@ -438,6 +438,8 @@ export function updateRoomConfig(): void {
 
 export async function init(): Promise<void> {
   const room = TribeState.getRoom();
+  console.log("Initializing tribe lobby page");
+  console.log(room);
   if (!room) return;
   reset();
   const link = location.origin + "/tribe/" + room.id;

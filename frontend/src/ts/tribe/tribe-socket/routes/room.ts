@@ -147,7 +147,9 @@ function nameChanged(callback: (data: { name: string }) => void): void {
   Socket.on("room_name_changed", callback);
 }
 
-function userIsReady(callback: (data: { userId: string }) => void): void {
+function userIsReady(
+  callback: (data: { userId: string; isReady: boolean }) => void,
+): void {
   Socket.on("room_user_is_ready", callback);
 }
 

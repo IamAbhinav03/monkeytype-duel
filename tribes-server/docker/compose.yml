@@ -1,0 +1,26 @@
+name: monkeytype-tribes
+
+services:
+  tribes-server:
+    container_name: monkeytype-tribes-server
+    build:
+      dockerfile_inline: |
+        FROM node:24.11.0
+        RUN npm i -g pnpm@9.6.0
+        RUN mkdir /pnpm-store && chown -R 1000:1000 /pnpm-store
+    user: "node"
+    restart: on-failure
+    environment:
+      - PORT=3005
+      - MODE=dev
+      - TRIBES_VERSION=dev
+    ports:
+      - "${DOCKER_TRIBES_PORT:-3005}:3005"
+    volumes:
+      - ../../../:/monkeytype
+    entrypoint:
+      'bash -c "echo starting tribes server, this may take a while... \
+      && cd /monkeytype \
+      && pnpm config set store-dir /pnpm-store \
+      && pnpm i \
+      && npm run dev-tribes"'
