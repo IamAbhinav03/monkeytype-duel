@@ -57,6 +57,11 @@
       ],
       "persistent": true
     },
+    "@monkeytype/tribes-server#build": {
+      "dependsOn": ["^build"],
+      "env": ["PORT", "MODE", "TRIBES_VERSION", "DB_URI"],
+      "persistent": true
+    },
     "@monkeytype/backend#dev": {
       "dependsOn": ["^build"],
       "env": ["DB_URI", "REDIS_URI", "PORT"],

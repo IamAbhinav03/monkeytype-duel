@@ -14,13 +14,13 @@ COPY tribes-server tribes-server
 # Install dependencies and build
 RUN npm i -g pnpm && \
     pnpm i --frozen-lockfile && \
-    pnpm --filter @monkeytype/tribes-server build
+    npm run build-tribes
 
 # Prepare production files (using pnpm deploy if possible, otherwise manual copy)
 # Since tribes-server is part of the workspace, we try to use pnpm deploy if it works,
 # but a simpler approach for now to match backend style is to grab what we built.
 # However, backend uses `pnpm deploy`. Let's try to mimic that structure but for tribes-server.
-RUN pnpm deploy --filter @monkeytype/tribes-server --prod /prod/tribes-server
+# RUN pnpm deploy --filter @monkeytype/tribes-server --prod /prod/tribes-server
 
 # ---------------------------------
 # Target Image
