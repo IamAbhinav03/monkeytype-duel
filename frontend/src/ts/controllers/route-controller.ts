@@ -170,6 +170,12 @@ const routes: Route[] = [
     },
   },
   {
+    path: "/rbh/duel-leaderboard",
+    load: async (_params, options) => {
+      await PageController.change("duelLeaderboard", options);
+    },
+  },
+  {
     path: "/account",
     load: async (_params, options) => {
       if (!isAuthAvailable()) {
