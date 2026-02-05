@@ -14,6 +14,7 @@ import * as UpdateConfig from "../../config";
 import * as Random from "../../utils/random";
 import TribeSocket from "../tribe-socket";
 import * as TribeSound from "../tribe-sound";
+import * as TribeCarets from "../tribe-carets";
 import type { DuelSide } from "./duel-state";
 
 // Production durations (overridable by server for race via duel_race_scheduled)
@@ -784,6 +785,27 @@ function navigateToTestAndStartCountdown(startAt: number): void {
 }
 
 /**
+ * Initialize opponent carets for the duel race.
+ * Must be called after words are rendered so TribeCarets can position them.
+ */
+function initDuelCarets(): void {
+  // Set all room users to isTyping so TribeCarets.init() creates carets for them
+  const TribeState = getTribeStateSync();
+  const room = TribeState?.getRoom();
+  if (room) {
+    for (const user of Object.values(room.users)) {
+      user.isTyping = true;
+      user.isFinished = false;
+    }
+  }
+
+  // Clean up any leftover carets and create fresh ones
+  TribeCarets.destroyAll();
+  TribeCarets.init();
+  console.log("[DuelFlow] Initialized opponent carets");
+}
+
+/**
  * Wait for #words element to exist before starting countdown.
  * Retries up to 10 times (every 100ms) after an initial 800ms wait.
  */
@@ -799,6 +821,7 @@ function waitForWordsAndStartCountdown(startAt: number, attempt: number): void {
           "[DuelFlow] #words element not found after retries, starting countdown anyway",
         );
       }
+      initDuelCarets();
       startRaceCountdown(startAt);
     } else {
       waitForWordsAndStartCountdown(startAt, attempt + 1);
@@ -907,6 +930,7 @@ export function onDuelRaceComplete(): void {
 
   DuelState.setFlowState("RESULTS");
   hideDuelBanner();
+  TribeCarets.destroyAll();
 
   // Show auto-advance button below results after a short delay
   setTimeout(() => {
