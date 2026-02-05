@@ -44,10 +44,7 @@ export const page = new Page({
     // TODO: Fill it up later
   },
   afterHide: async () => {
-    // TODO: Fill it up later
-    TribeChat.reset("lobby");
-
-    // In duel mode, keep socket connected during the entire duel flow (including RESULTS)
+    // In duel mode, keep socket connected during the entire duel flow
     if (
       isDuelModeEnabled() &&
       (DuelState.isInDuelFlow() || DuelState.getFlowState() === "RESULTS")
@@ -56,12 +53,17 @@ export const page = new Page({
       return;
     }
 
+    TribeChat.reset("lobby");
+
     if (!TribeState.isInARoom()) {
       tribeSocket.disconnect();
       TribePagePreloader.reset();
     }
   },
   beforeShow: async () => {
+    // Skip chat restore in duel mode (chat is hidden)
+    if (isDuelModeEnabled()) return;
+
     if (TribeState.isInARoom()) {
       void TribeChat.fill("lobby").then(() => {
         TribeChat.scrollChat();

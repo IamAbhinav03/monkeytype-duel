@@ -22,12 +22,7 @@ import {
   indexedDBLocalPersistence,
   getAdditionalUserInfo,
 } from "firebase/auth";
-import * as Notifications from "./elements/notifications";
-import {
-  createErrorMessage,
-  isDevEnvironment,
-  promiseWithResolvers,
-} from "./utils/misc";
+import { createErrorMessage, promiseWithResolvers } from "./utils/misc";
 
 import {
   Analytics as AnalyticsType,
@@ -83,14 +78,6 @@ export async function init(callback: ReadyCallback): Promise<void> {
     Auth = undefined;
     console.error("Firebase failed to initialize", e);
     await callback(false, null);
-    if (isDevEnvironment()) {
-      Notifications.addPSA(
-        createErrorMessage(e, "Firebase uninitialized"),
-        0,
-        undefined,
-        false,
-      );
-    }
   } finally {
     resolveAuthPromise();
   }
