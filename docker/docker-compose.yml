@@ -41,6 +41,7 @@ services:
       - PORT=3005
       - MODE=prod
       - TRIBES_VERSION=25.12.4
+      - DUEL_ENABLED=true
     healthcheck:
       test: ["CMD", "nc", "-z", "-v", "localhost", "3005"]
       interval: 5s
