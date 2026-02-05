@@ -38,6 +38,7 @@ const corsOptions = isDevMode
         "https://monkeytype.com",
         "https://dev.monkeytype.com",
         "https://monkeytype-test.rbh.makerspace.tools",
+        "https://monkeytype.rbh.makerspace.tools",
       ],
       methods: ["GET", "POST"],
       credentials: true,
