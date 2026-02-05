@@ -29,7 +29,7 @@ function getTribesServerUrl(): string {
   return `http://${hostname}:3005`;
 }
 
-console.log(`Looking for Triber Server at: ${getTribesServerUrl()}`);
+console.log(`Looking for Tribes Server at: ${getTribesServerUrl()}`);
 
 export default io(getTribesServerUrl(), {
   autoConnect: false,
