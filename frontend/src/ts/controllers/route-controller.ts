@@ -181,6 +181,12 @@ const routes: Route[] = [
     },
   },
   {
+    path: "/rbh/test-tribe",
+    load: async (_params, options) => {
+      await PageController.change("rbhTestTribe", options);
+    },
+  },
+  {
     path: "/account",
     load: async (_params, options) => {
       if (!isAuthAvailable()) {
