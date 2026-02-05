@@ -996,9 +996,12 @@
   margin-top: 2rem;
   padding: 1.5rem 3rem;
   text-align: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
 
   &.active {
     display: flex;
+    opacity: 1;
   }
 
   .duelCountdownMessage {

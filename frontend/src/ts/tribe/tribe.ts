@@ -569,6 +569,15 @@ TribeSocket.in.room.configChanged(async (data) => {
 
 // socket.on("room_init_race", (e) => {
 TribeSocket.in.room.initRace((data) => {
+  // In duel mode, duel-flow.ts handles race orchestration via duel_race_scheduled.
+  // Skip the standard room_init_race flow to prevent double navigation.
+  if (isDuelModeEnabled() && DuelFlow.isInDuelFlow()) {
+    console.log(
+      "[Tribe] Skipping room_init_race — duel flow handles race start",
+    );
+    return;
+  }
+
   // @IamAbhinav03
   // Sorry for the stupid as long conditionals and logs
   // had to satisfy the stupid linter rules and
@@ -635,6 +644,14 @@ TribeSocket.in.room.initRace((data) => {
 });
 
 TribeSocket.in.room.stateChanged((data) => {
+  // In duel mode during racing, duel-flow.ts manages state transitions.
+  // Skip standard room state changes to prevent conflicting navigation.
+  if (isDuelModeEnabled() && DuelFlow.isRacing()) {
+    console.log(
+      `[Tribe] Skipping room_state_changed (${data.state}) — duel flow is racing`,
+    );
+    return;
+  }
   updateRoomState(data.state);
 });
 

@@ -188,7 +188,11 @@ export type ServerToClientEvents = {
   // Duel events
   duel_opponent_joined: (data: { username: string; side: DuelSide }) => void;
   duel_opponent_left: (data: { side: DuelSide }) => void;
-  duel_race_scheduled: (data: { startAt: number; seed: number }) => void;
+  duel_race_scheduled: (data: {
+    startAt: number;
+    seed: number;
+    raceDuration: number;
+  }) => void;
 };
 
 // Inter-server events (none for now)

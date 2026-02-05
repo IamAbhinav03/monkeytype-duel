@@ -43,7 +43,7 @@ export function registerDuelHandlers(
   // Register system side (L or R)
   // ============================================================
   socket.on("duel_register_system", (data, callback) => {
-    const result = duelService.registerSystem(socket, data.side);
+    const result = duelService.registerSystem(io, socket, data.side);
     callback(result);
   });
 

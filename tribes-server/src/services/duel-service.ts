@@ -3,8 +3,10 @@ import type { Server, Socket } from "socket.io";
 import { duelStore } from "../stores/duel-store.js";
 import { roomStore } from "../stores/room-store.js";
 import { validateOtp } from "../utils/duel-otp.js";
+import type { Room, UserProgress } from "../types/room.js";
 import { DUEL_CONFIG, type DuelSide } from "../config.js";
 import { getDefaultRoomConfig } from "../types/config.js";
+import { timerService, TimerType } from "./timer-service.js";
 import Logger from "../utils/logger.js";
 import type {
   ClientToServerEvents,
@@ -36,6 +38,13 @@ export interface DuelAckResponse {
   data?: unknown;
 }
 
+// Disconnect grace period: socketId -> timeout handle
+const disconnectGracePeriods: Map<
+  string,
+  ReturnType<typeof setTimeout>
+> = new Map();
+const DISCONNECT_GRACE_MS = 10_000; // 10 seconds
+
 // ============================================================
 // System Registration
 // ============================================================
@@ -44,8 +53,10 @@ export interface DuelAckResponse {
  * Register a socket for a duel side (L or R).
  * - Side must be available (not occupied)
  * - Socket must not be already registered
+ * - If existing socket is dead (disconnected), releases it and re-registers
  */
 export function registerSystem(
+  io: TribesServer,
   socket: TribesSocket,
   side: DuelSide,
 ): DuelAckResponse {
@@ -59,7 +70,77 @@ export function registerSystem(
     return { ok: false, error: "Already registered to a side" };
   }
 
-  // Attempt registration
+  // If side is occupied, check if existing socket is dead
+  if (!duelStore.isSideAvailable(side)) {
+    const existingParticipant = duelStore.getParticipant(side);
+    if (existingParticipant) {
+      const existingSocket = io.sockets.sockets.get(
+        existingParticipant.socketId,
+      );
+      if (!existingSocket || existingSocket.disconnected) {
+        // Dead socket detected — transfer side to new socket
+        Logger.info(
+          `Dead socket ${existingParticipant.socketId} detected on side ${side}, transferring to ${socket.id}`,
+        );
+        const transferred = duelStore.transferSide(
+          existingParticipant.socketId,
+          socket.id,
+        );
+        if (transferred) {
+          (socket.data as SocketData & { duelSide?: DuelSide }).duelSide = side;
+          socket.data.name = transferred.username || socket.data.name;
+
+          return {
+            ok: true,
+            data: {
+              side,
+              wasAuthenticated: transferred.isAuthenticated,
+              practiceCount: transferred.practiceCount,
+              username: transferred.username,
+              userId: transferred.userId,
+            },
+          };
+        }
+      } else {
+        // Check if in reconnect grace period
+        const gracePeriod = disconnectGracePeriods.get(
+          existingParticipant.socketId,
+        );
+        if (gracePeriod) {
+          // Cancel grace period timer and transfer
+          clearTimeout(gracePeriod);
+          disconnectGracePeriods.delete(existingParticipant.socketId);
+
+          Logger.info(
+            `Grace period active for ${existingParticipant.socketId} on side ${side}, transferring to ${socket.id}`,
+          );
+          const transferred = duelStore.transferSide(
+            existingParticipant.socketId,
+            socket.id,
+          );
+          if (transferred) {
+            (socket.data as SocketData & { duelSide?: DuelSide }).duelSide =
+              side;
+            socket.data.name = transferred.username || socket.data.name;
+
+            return {
+              ok: true,
+              data: {
+                side,
+                wasAuthenticated: transferred.isAuthenticated,
+                practiceCount: transferred.practiceCount,
+                username: transferred.username,
+                userId: transferred.userId,
+              },
+            };
+          }
+        }
+        return { ok: false, error: `Side ${side} is already occupied` };
+      }
+    }
+  }
+
+  // Attempt fresh registration
   const success = duelStore.registerSide(socket.id, side);
   if (!success) {
     return { ok: false, error: `Side ${side} is already occupied` };
@@ -290,7 +371,51 @@ export function joinLobby(
     );
 
     // Emit to all players in the room (including the joiner)
-    io.to(roomId).emit("duel_race_scheduled", { startAt, seed });
+    io.to(roomId).emit("duel_race_scheduled", {
+      startAt,
+      seed,
+      raceDuration: DUEL_CONFIG.RACE_DURATION_SECONDS,
+    });
+
+    // Initialize the room for race: set seed, reset user states, transition to RACE_ONGOING
+    existingRoom.seed = seed;
+    existingRoom.maxRaw = 0;
+    existingRoom.maxWpm = 0;
+    existingRoom.minRaw = Infinity;
+    existingRoom.minWpm = Infinity;
+    existingRoom.startAt = startAt;
+
+    Object.values(existingRoom.users).forEach((user) => {
+      user.isReady = false;
+      user.isFinished = false;
+      user.isTyping = true;
+      user.result = undefined;
+      user.progress = undefined;
+    });
+
+    // Transition to RACE_ONGOING after the start delay so progress broadcasts work
+    const duelRoomId = roomId; // Capture for closure (guaranteed non-null in else branch)
+    setTimeout(() => {
+      if (existingRoom.state === "LOBBY") {
+        existingRoom.state = "RACE_ONGOING";
+        io.to(duelRoomId).emit("room_state_changed", {
+          state: "RACE_ONGOING",
+        });
+
+        // Start progress broadcast interval for duel room
+        const PROGRESS_UPDATE_INTERVAL = 100;
+        timerService.start(duelRoomId, TimerType.PROGRESS, {
+          duration: Infinity,
+          interval: PROGRESS_UPDATE_INTERVAL,
+          onTick: () => {
+            broadcastDuelProgress(io, existingRoom);
+          },
+          onComplete: (): void => {
+            // Progress updates run until manually stopped
+          },
+        });
+      }
+    }, DUEL_CONFIG.START_DELAY_MS);
 
     return {
       ok: true,
@@ -309,25 +434,41 @@ export function joinLobby(
 
 /**
  * Handle socket disconnect.
- * - Releases side
- * - Cleans up room if necessary
+ * - Uses a grace period to allow reconnection
+ * - If no reconnection within grace period, releases side and cleans up
  */
 export function handleDisconnect(io: TribesServer, socket: TribesSocket): void {
-  const side = duelStore.releaseSide(socket.id);
-  if (side) {
-    Logger.info(`Socket ${socket.id} (Side ${side}) disconnected`);
+  const side = duelStore.getSideBySocket(socket.id);
+  if (!side) return;
 
-    // If in duel room, handle room cleanup
-    const roomId = duelStore.getActiveRoom();
+  Logger.info(
+    `Socket ${socket.id} (Side ${side}) disconnected — starting ${DISCONNECT_GRACE_MS}ms grace period`,
+  );
+
+  // Notify opponent of temporary disconnect
+  const roomId = duelStore.getActiveRoom();
+  if (roomId) {
+    socket.to(roomId).emit("duel_opponent_left", { side });
+  }
+
+  // Start grace period — if the user reconnects within this window,
+  // their side is transferred instead of released
+  const timer = setTimeout(() => {
+    disconnectGracePeriods.delete(socket.id);
+
+    Logger.info(
+      `Grace period expired for ${socket.id} (Side ${side}), releasing side`,
+    );
+
+    const releasedSide = duelStore.releaseSide(socket.id);
+    if (!releasedSide) return;
+
+    // Clean up room
     if (roomId) {
       const room = roomStore.getRoom(roomId);
       if (room && room.users[socket.id]) {
-        // Notify opponent
-        socket.to(roomId).emit("duel_opponent_left", { side });
-
-        // Remove from room
         roomStore.removeUserFromRoom(socket.id);
-        socket.to(roomId).emit("room_player_left", { userId: socket.id });
+        io.to(roomId).emit("room_player_left", { userId: socket.id });
 
         // If room is now empty, clear duel state
         const updatedRoom = roomStore.getRoom(roomId);
@@ -338,7 +479,9 @@ export function handleDisconnect(io: TribesServer, socket: TribesSocket): void {
         }
       }
     }
-  }
+  }, DISCONNECT_GRACE_MS);
+
+  disconnectGracePeriods.set(socket.id, timer);
 }
 
 // ============================================================
@@ -433,4 +576,43 @@ export function getDuelStatus(): {
         : null,
     },
   };
+}
+
+// ============================================================
+// Progress Broadcasting for Duel Rooms
+// ============================================================
+
+function broadcastDuelProgress(io: TribesServer, room: Room): void {
+  const users: Record<string, UserProgress> = {};
+
+  let maxRaw = 0;
+  let maxWpm = 0;
+  let minRaw = Infinity;
+  let minWpm = Infinity;
+
+  Object.entries(room.users).forEach(([id, user]) => {
+    if (user.progress) {
+      users[id] = user.progress;
+
+      if (user.progress.raw > maxRaw) maxRaw = user.progress.raw;
+      if (user.progress.wpm > maxWpm) maxWpm = user.progress.wpm;
+      if (user.progress.raw < minRaw && user.progress.raw > 0)
+        minRaw = user.progress.raw;
+      if (user.progress.wpm < minWpm && user.progress.wpm > 0)
+        minWpm = user.progress.wpm;
+    }
+  });
+
+  room.maxRaw = maxRaw;
+  room.maxWpm = maxWpm;
+  room.minRaw = minRaw === Infinity ? 0 : minRaw;
+  room.minWpm = minWpm === Infinity ? 0 : minWpm;
+
+  io.to(room.id).emit("room_progress_update", {
+    users,
+    roomMaxRaw: room.maxRaw,
+    roomMaxWpm: room.maxWpm,
+    roomMinRaw: room.minRaw,
+    roomMinWpm: room.minWpm,
+  });
 }

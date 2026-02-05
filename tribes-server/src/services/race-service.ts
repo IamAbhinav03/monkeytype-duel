@@ -105,6 +105,15 @@ function handleStateEntry(
 }
 
 function handleRaceInit(io: TribesServer, room: Room): void {
+  // Duel rooms use duel_race_scheduled for race orchestration instead of
+  // the standard room_init_race flow. Skip the standard flow entirely.
+  if (room.type === "duel") {
+    Logger.info(
+      `Skipping standard handleRaceInit for duel room ${room.id} — duel-service handles race scheduling`,
+    );
+    return;
+  }
+
   room.seed = generateSeed();
   room.maxRaw = 0;
   room.maxWpm = 0;
@@ -120,17 +129,7 @@ function handleRaceInit(io: TribesServer, room: Room): void {
     user.progress = undefined;
   });
 
-  // For duel rooms, calculate startAt for synchronized start
-  if (room.type === "duel") {
-    room.startAt = Date.now() + DUEL_CONFIG.START_DELAY_MS;
-    io.to(room.id).emit("room_init_race", {
-      seed: room.seed,
-      startAt: room.startAt,
-    });
-    Logger.info(`Duel race init: seed=${room.seed}, startAt=${room.startAt}`);
-  } else {
-    io.to(room.id).emit("room_init_race", { seed: room.seed });
-  }
+  io.to(room.id).emit("room_init_race", { seed: room.seed });
 
   // Transition to countdown after a brief delay
   setTimeout(() => {

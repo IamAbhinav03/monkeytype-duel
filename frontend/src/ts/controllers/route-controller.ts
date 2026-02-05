@@ -301,12 +301,12 @@ export async function navigate(
   // Block all navigation during duel flow except allowed paths
   if (
     isDuelModeEnabled() &&
-    DuelState.shouldBlockUI() &&
+    DuelState.shouldBlockNavigation() &&
     !options?.tribeOverride
   ) {
-    // Only allow "/" (test page) and "/tribe" during duel practice flow
+    // Only allow "/", "/tribe", and "/waiting" during duel flow
     const cleanUrl = url.replace(/\/$/, "") || "/";
-    if (cleanUrl !== "/" && cleanUrl !== "/tribe") {
+    if (cleanUrl !== "/" && cleanUrl !== "/tribe" && cleanUrl !== "/waiting") {
       console.log(`[DuelFlow] Navigation to ${url} blocked during duel flow`);
       return;
     }

@@ -15,13 +15,10 @@ import * as Random from "../../utils/random";
 import TribeSocket from "../tribe-socket";
 import type { DuelSide } from "./duel-state";
 
-// ===========================================
-// TOGGLE THESE FOR TESTING (set to 5 for quick tests, 30/60 for production)
-// ===========================================
-const PRACTICE_1_DURATION_SECONDS = 5; // Production: 30
-const PRACTICE_2_DURATION_SECONDS = 5; // Production: 60
-const RACE_DURATION_SECONDS = 5; // Production: 30
-// ===========================================
+// Production durations (overridable by server for race via duel_race_scheduled)
+const PRACTICE_1_DURATION_SECONDS = 30;
+const PRACTICE_2_DURATION_SECONDS = 60;
+let raceDurationSeconds = 30; // Updated from server's duel_race_scheduled event
 
 // Constants
 const PRACTICE_COUNT_REQUIRED = 2;
@@ -67,7 +64,7 @@ export async function init(): Promise<void> {
 
 /**
  * Called when socket connects and we already have a side (from localStorage).
- * Register side and stay on OTP page.
+ * Register side and stay on OTP page — or skip OTP if server preserved auth.
  */
 async function onSocketConnectedForOtp(): Promise<void> {
   console.log("[DuelFlow] Socket connected for OTP flow");
@@ -103,6 +100,38 @@ async function onSocketConnectedForOtp(): Promise<void> {
 
   // Perform time sync
   await DuelTimeSync.sync();
+
+  // Check if server preserved auth from a previous session (reconnect)
+  const data = result.data as
+    | {
+        wasAuthenticated?: boolean;
+        practiceCount?: number;
+        username?: string;
+        userId?: string;
+      }
+    | undefined;
+
+  if (
+    data?.wasAuthenticated === true &&
+    data.username !== undefined &&
+    data.username !== "" &&
+    data.userId !== undefined &&
+    data.userId !== ""
+  ) {
+    console.log(
+      `[DuelFlow] Reconnected with preserved auth: ${data.username}, practice=${data.practiceCount}`,
+    );
+    DuelState.restoreState(data.practiceCount ?? 0, data.userId, data.username);
+
+    // Resume from correct flow state
+    const practiceCount = data.practiceCount ?? 0;
+    if (practiceCount >= 2) {
+      await joinDuelLobby();
+    } else {
+      await startPracticeFlow();
+    }
+    return;
+  }
 
   // Stay on OTP page, ready for authentication
   console.log("[DuelFlow] Registered side, waiting for OTP");
@@ -503,8 +532,20 @@ const WAITING_PAGE_DURATION_MS = 5000; // 5 seconds on waiting page
  * Handle race scheduled event with synchronized start time.
  * Shows waiting page for 5 seconds, then test page with countdown.
  */
-export function onRaceScheduled(startAt: number, seed: number): void {
+export function onRaceScheduled(
+  startAt: number,
+  seed: number,
+  serverRaceDuration?: number,
+): void {
   console.log(`[DuelFlow] Race scheduled for ${startAt}, seed: ${seed}`);
+
+  // Use server-provided race duration if available
+  if (serverRaceDuration !== undefined && serverRaceDuration > 0) {
+    raceDurationSeconds = serverRaceDuration;
+    console.log(
+      `[DuelFlow] Using server race duration: ${raceDurationSeconds}s`,
+    );
+  }
 
   // Set state to RACING
   DuelState.setFlowState("RACING");
@@ -534,24 +575,19 @@ export function onRaceScheduled(startAt: number, seed: number): void {
   // Configure race settings BEFORE navigation
   // This ensures words are generated with correct config
   UpdateConfig.setConfig("mode", "time", { nosave: true });
-  UpdateConfig.setConfig("time", RACE_DURATION_SECONDS, { nosave: true });
+  UpdateConfig.setConfig("time", raceDurationSeconds, { nosave: true });
   UpdateConfig.setConfig("language", "english", { nosave: true });
   UpdateConfig.setConfig("numbers", false, { nosave: true });
   UpdateConfig.setConfig("punctuation", false, { nosave: true });
+
+  // Set waiting page message via DuelState — the waiting page's afterShow reads it
+  DuelState.setWaitingPageMessage("Get ready...");
 
   // Navigate to waiting page first
   NavigationEvent.dispatch("/waiting", {
     tribeOverride: true,
     force: true,
   });
-
-  // Update waiting page message
-  setTimeout(() => {
-    const messageEl = document.querySelector(".pageWaiting .message");
-    if (messageEl) {
-      messageEl.textContent = "Get ready...";
-    }
-  }, 100);
 
   // After waiting page duration, navigate to test page
   setTimeout(() => {
@@ -570,11 +606,31 @@ function navigateToTestAndStartCountdown(startAt: number): void {
     force: true,
   });
 
-  // Wait a bit for page transition to complete, then start countdown
-  // This ensures the test page is fully loaded with words visible
+  // Wait for page to load, then verify #words element exists before starting countdown
+  waitForWordsAndStartCountdown(startAt, 0);
+}
+
+/**
+ * Wait for #words element to exist before starting countdown.
+ * Retries up to 10 times (every 100ms) after an initial 800ms wait.
+ */
+function waitForWordsAndStartCountdown(startAt: number, attempt: number): void {
+  const delay = attempt === 0 ? 800 : 100;
+  const maxAttempts = 10;
+
   setTimeout(() => {
-    startRaceCountdown(startAt);
-  }, 500); // Give page time to initialize
+    const wordsEl = document.getElementById("words");
+    if (wordsEl || attempt >= maxAttempts) {
+      if (!wordsEl) {
+        console.warn(
+          "[DuelFlow] #words element not found after retries, starting countdown anyway",
+        );
+      }
+      startRaceCountdown(startAt);
+    } else {
+      waitForWordsAndStartCountdown(startAt, attempt + 1);
+    }
+  }, delay);
 }
 
 /**
@@ -698,6 +754,32 @@ export function resetToOtp(): void {
   void TribePages.change("otp");
 }
 
+// --- F5 / Hard Refresh Detection ---
+// F5 or Ctrl+Shift+R sets a flag so initDuelState knows to go to SYSTEM_SELECT
+const HARD_REFRESH_FLAG = "duel_hard_refresh";
+
+window.addEventListener("keydown", (e) => {
+  if (
+    e.key === "F5" ||
+    (e.ctrlKey && e.shiftKey && e.key === "R") ||
+    (e.metaKey && e.shiftKey && e.key === "r")
+  ) {
+    const state = DuelState.getFlowState();
+    if (state !== "SYSTEM_SELECT") {
+      localStorage.setItem(HARD_REFRESH_FLAG, "true");
+    }
+  }
+});
+
+// --- Beforeunload Warning ---
+// Warn user before closing tab during active duel (not during OTP/SYSTEM_SELECT)
+window.addEventListener("beforeunload", (e) => {
+  const state = DuelState.getFlowState();
+  if (state !== "SYSTEM_SELECT" && state !== "OTP") {
+    e.preventDefault();
+  }
+});
+
 // --- Socket Event Handlers ---
 // These should be registered when socket connects
 
@@ -713,7 +795,7 @@ export function registerSocketHandlers(): void {
 
   // Race scheduled with startAt
   TribeSocket.in.duel.raceScheduled((data) => {
-    onRaceScheduled(data.startAt, data.seed);
+    onRaceScheduled(data.startAt, data.seed, data.raceDuration);
   });
 }
 

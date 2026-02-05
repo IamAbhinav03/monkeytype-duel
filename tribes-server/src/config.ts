@@ -7,6 +7,9 @@ export const DUEL_CONFIG = {
   // Path to OTP mapping JSON file
   OTP_PATH: process.env["DUEL_OTP_PATH"] ?? "./duel-otp.json",
 
+  // Path to persist duel results
+  RESULTS_PATH: process.env["DUEL_RESULTS_PATH"] ?? "./duel-results.json",
+
   // Delay before synchronized race start (ms)
   // Must account for: 5s waiting page + 5s countdown = 10s minimum
   START_DELAY_MS: parseInt(process.env["DUEL_START_DELAY_MS"] ?? "10000", 10),

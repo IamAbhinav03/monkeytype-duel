@@ -124,8 +124,25 @@ export function fullReset(): void {
   console.log(`[DuelState] Full reset`);
 }
 
+// --- Constants ---
+const HARD_REFRESH_FLAG = "duel_hard_refresh";
+
 // --- Initialization ---
 export function initDuelState(): DuelFlowState {
+  // Check for hard refresh flag (F5/Ctrl+Shift+R)
+  if (localStorage.getItem(HARD_REFRESH_FLAG) === "true") {
+    localStorage.removeItem(HARD_REFRESH_FLAG);
+    localStorage.removeItem(STORAGE_KEY_SIDE);
+    side = undefined;
+    flowState = "SYSTEM_SELECT";
+    userId = undefined;
+    username = undefined;
+    practiceCount = 0;
+    isAuthenticated = false;
+    console.log(`[DuelState] Hard refresh detected, going to SYSTEM_SELECT`);
+    return flowState;
+  }
+
   // Check for persisted side from localStorage
   const storedSide = localStorage.getItem(STORAGE_KEY_SIDE) as DuelSide | null;
 
@@ -150,6 +167,34 @@ export function initDuelState(): DuelFlowState {
   isAuthenticated = false;
 
   return flowState;
+}
+
+/**
+ * Restore state from a reconnection that preserved auth/practice on the server.
+ */
+export function restoreState(
+  restoredPracticeCount: number,
+  restoredUserId: string,
+  restoredUsername: string,
+): void {
+  userId = restoredUserId;
+  username = restoredUsername;
+  practiceCount = restoredPracticeCount;
+  isAuthenticated = true;
+
+  // Determine the correct flow state based on practice progress
+  if (restoredPracticeCount >= 2) {
+    flowState = "LOBBY";
+  } else if (restoredPracticeCount === 1) {
+    flowState = "PRACTICE_2";
+  } else {
+    flowState = "PRACTICE_1";
+  }
+
+  updateBodyClass();
+  console.log(
+    `[DuelState] Restored state: ${restoredUsername}, practice=${restoredPracticeCount}, flowState=${flowState}`,
+  );
 }
 
 // --- State Queries ---
@@ -187,4 +232,22 @@ export function shouldBlockRestart(): boolean {
   // Block restarts during practice, result viewing, countdowns, and racing
   // But allow the initial test initialization with tribeOverride
   return isPracticing() || isShowingResult() || isInCountdown() || isRacing();
+}
+
+export function shouldBlockNavigation(): boolean {
+  // Block navigation for all states except SYSTEM_SELECT (haven't started yet)
+  return flowState !== "SYSTEM_SELECT";
+}
+
+// --- Waiting page message ---
+let waitingPageMessage: string | undefined;
+
+export function setWaitingPageMessage(msg: string): void {
+  waitingPageMessage = msg;
+}
+
+export function consumeWaitingPageMessage(): string | undefined {
+  const msg = waitingPageMessage;
+  waitingPageMessage = undefined;
+  return msg;
 }

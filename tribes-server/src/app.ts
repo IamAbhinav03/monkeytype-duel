@@ -90,8 +90,9 @@ const io = new Server<
   pingInterval: 25000,
 });
 
-// Load OTP map for duel mode at startup
+// Load OTP map and persisted results for duel mode at startup
 loadOtpMap();
+duelStore.loadResults();
 
 // Handle new socket connections
 io.on("connection", (socket) => {

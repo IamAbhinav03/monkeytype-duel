@@ -47,8 +47,11 @@ export const page = new Page({
     // TODO: Fill it up later
     TribeChat.reset("lobby");
 
-    // In duel mode, keep socket connected during the entire duel flow
-    if (isDuelModeEnabled() && DuelState.isInDuelFlow()) {
+    // In duel mode, keep socket connected during the entire duel flow (including RESULTS)
+    if (
+      isDuelModeEnabled() &&
+      (DuelState.isInDuelFlow() || DuelState.getFlowState() === "RESULTS")
+    ) {
       console.log("[TribePage] Keeping socket connected during duel flow");
       return;
     }
@@ -69,6 +72,13 @@ export const page = new Page({
     // In duel mode with LOBBY state, show the duel lobby page
     if (isDuelModeEnabled() && DuelState.getFlowState() === "LOBBY") {
       console.log("[TribePage] Showing duel lobby page");
+      void TribePages.change("lobby");
+      return;
+    }
+
+    // In duel mode with RESULTS state, show duel complete messaging
+    if (isDuelModeEnabled() && DuelState.getFlowState() === "RESULTS") {
+      console.log("[TribePage] Showing duel results page");
       void TribePages.change("lobby");
       return;
     }

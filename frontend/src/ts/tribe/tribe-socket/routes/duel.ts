@@ -81,7 +81,11 @@ function opponentLeft(callback: (data: { side: DuelSide }) => void): void {
 }
 
 function raceScheduled(
-  callback: (data: { startAt: number; seed: number }) => void,
+  callback: (data: {
+    startAt: number;
+    seed: number;
+    raceDuration: number;
+  }) => void,
 ): void {
   Socket.on("duel_race_scheduled", callback);
 }

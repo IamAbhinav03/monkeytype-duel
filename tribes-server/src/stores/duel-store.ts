@@ -1,5 +1,7 @@
 // Duel state management - singleton store for duel-specific state
-import type { DuelSide } from "../config.js";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { DUEL_CONFIG, type DuelSide } from "../config.js";
+import Logger from "../utils/logger.js";
 
 /**
  * Represents a participant in a duel (one per side L/R)
@@ -113,6 +115,29 @@ class DuelStore {
   getParticipantBySocket(socketId: string): DuelParticipant | null {
     const side = this.socketToSide.get(socketId);
     return side !== undefined ? (this.sides.get(side) ?? null) : null;
+  }
+
+  /**
+   * Transfer a side from an old socket to a new socket.
+   * Preserves authentication and practice state.
+   * Returns the participant data if successful, null otherwise.
+   */
+  transferSide(
+    oldSocketId: string,
+    newSocketId: string,
+  ): DuelParticipant | null {
+    const side = this.socketToSide.get(oldSocketId);
+    if (side === undefined) return null;
+
+    const participant = this.sides.get(side);
+    if (!participant) return null;
+
+    // Update socket mappings
+    this.socketToSide.delete(oldSocketId);
+    this.socketToSide.set(newSocketId, side);
+    participant.socketId = newSocketId;
+
+    return participant;
   }
 
   /**
@@ -300,7 +325,7 @@ class DuelStore {
   // ============================================================
 
   /**
-   * Add a completed duel result.
+   * Add a completed duel result and persist to disk.
    */
   addResult(
     L: { wpm: number; raw: number; acc: number; consistency: number },
@@ -317,6 +342,7 @@ class DuelStore {
     };
 
     this.results.push(result);
+    this.persistResults();
     return result;
   }
 
@@ -332,6 +358,45 @@ class DuelStore {
    */
   getLatestResult(): DuelResult | undefined {
     return this.results[this.results.length - 1];
+  }
+
+  /**
+   * Load results from disk. Safe to call at startup.
+   */
+  loadResults(): void {
+    const path = DUEL_CONFIG.RESULTS_PATH;
+    if (!existsSync(path)) {
+      Logger.info(`No existing results file at ${path}, starting fresh`);
+      return;
+    }
+
+    try {
+      const raw = readFileSync(path, "utf-8");
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        this.results = parsed as DuelResult[];
+        Logger.success(
+          `Loaded ${this.results.length} duel results from ${path}`,
+        );
+      }
+    } catch (error) {
+      Logger.warning(`Failed to load duel results: ${error}`);
+    }
+  }
+
+  /**
+   * Persist results to disk.
+   */
+  persistResults(): void {
+    try {
+      writeFileSync(
+        DUEL_CONFIG.RESULTS_PATH,
+        JSON.stringify(this.results, null, 2),
+        "utf-8",
+      );
+    } catch (error) {
+      Logger.warning(`Failed to persist duel results: ${error}`);
+    }
   }
 
   // ============================================================
