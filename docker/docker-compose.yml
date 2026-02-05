@@ -25,6 +25,7 @@ services:
       - FIREBASE_APPID=${FIREBASE_APPID:-}
       - MONKEYTYPE_BACKENDURL=${MONKEYTYPE_BACKENDURL}
       - RECAPTCHA_SITE_KEY=${RECAPTCHA_SITE_KEY:-}
+      - FORCE_TRIBE=true
 
   monkeytype-backend:
     container_name: monkeytype-backend
