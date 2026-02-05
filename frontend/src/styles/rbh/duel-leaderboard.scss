@@ -1,0 +1,335 @@
+.pageDuelLeaderboard {
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 4rem;
+    padding: 3rem 0;
+    max-width: 1400px;
+    margin: 0 auto;
+    height: 100%;
+    justify-content: center;
+  }
+
+  // ============ TUG OF WAR SECTION ============
+  .tugOfWar {
+    padding: 2rem 0;
+    margin-bottom: 2rem;
+    position: relative;
+    height: 60px;
+    display: flex;
+    align-items: center;
+
+    .ropeContainer {
+      width: 100%;
+      position: relative;
+      height: 100%;
+      display: flex;
+      align-items: center;
+    }
+
+    .rope {
+      width: 100%;
+      height: 12px;
+      display: flex;
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      // No background on container
+
+      .leftSide {
+        height: 100%;
+        // Gradient for volume and visuals
+        background: linear-gradient(
+          90deg,
+          var(--main-color) 0%,
+          color-mix(in srgb, var(--main-color), white 20%) 100%
+        );
+        border-top-left-radius: 100px;
+        border-bottom-left-radius: 100px;
+        // Width set via JS
+        transition:
+          clip-path 0.5s ease-in-out,
+          width 0.1s linear;
+        box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        z-index: 1;
+      }
+
+      .rightSide {
+        height: 100%;
+        // Gradient for volume and visuals
+        background: linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--sub-color), white 20%) 0%,
+          var(--sub-color) 100%
+        );
+        border-top-right-radius: 100px;
+        border-bottom-right-radius: 100px;
+        // Width set via JS
+        transition:
+          clip-path 0.5s ease-in-out,
+          width 0.1s linear;
+        z-index: 0;
+      }
+    }
+
+    // Marker container removed
+    .markerContainer {
+      display: none;
+    }
+
+    .triangleMarker {
+      display: none;
+    }
+  }
+
+  // ============ PLAYERS SECTION ============
+  .playersSection {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6rem;
+    align-items: start;
+  }
+
+  .playerCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 250px;
+    position: relative;
+    padding: 2rem;
+
+    &.player1 {
+      .wpmValue {
+        color: var(--main-color);
+      }
+
+      .crown {
+        left: -2rem;
+        top: -1rem;
+        transform: rotate(-30deg);
+      }
+    }
+
+    &.player2 {
+      .wpmValue {
+        color: var(--text-color);
+      }
+
+      .crown {
+        right: -2rem;
+        top: -1rem;
+        transform: rotate(30deg);
+      }
+    }
+
+    .crown {
+      position: absolute;
+      font-size: 4rem;
+      color: #ffd700;
+      text-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+      animation: crownBounce 2s ease-in-out infinite;
+      z-index: 10;
+
+      &.hidden {
+        display: none;
+      }
+    }
+
+    .playerNameContainer {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 2rem;
+      text-align: center;
+      width: 100%;
+    }
+
+    .name {
+      font-size: 5rem;
+      font-weight: 800;
+      color: var(--text-color);
+      line-height: 1.1;
+      display: block;
+      text-align: center;
+    }
+
+    .wpmContainer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+
+      .wpmValue {
+        font-size: 9rem;
+        font-weight: 900;
+        line-height: 1;
+        transition: transform 0.2s ease-out;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .wpmLabel {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-color);
+        opacity: 0.6;
+        margin-top: 1rem;
+      }
+    }
+
+    // Waiting state
+    .waitingState {
+      text-align: center;
+      color: var(--sub-color);
+      padding: 4rem;
+
+      &.hidden {
+        display: none;
+      }
+
+      .waitingText {
+        font-size: 1.5rem;
+        font-weight: 400;
+      }
+
+      .dots {
+        display: inline-flex;
+        gap: 0.2em;
+        margin-left: 0.25em;
+
+        .dot {
+          font-size: 2.5rem;
+          animation: dotWave 1.4s ease-in-out infinite;
+
+          &:nth-child(1) {
+            animation-delay: 0s;
+          }
+
+          &:nth-child(2) {
+            animation-delay: 0.2s;
+          }
+
+          &:nth-child(3) {
+            animation-delay: 0.4s;
+          }
+        }
+      }
+    }
+  }
+
+  // ============ TIMER SECTION ============
+  .timerSection {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    margin-top: 2rem;
+  }
+
+  .timerDisplay {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    .timerLabel {
+      font-size: 2rem;
+      font-weight: 400;
+      color: var(--sub-color);
+      order: 1;
+    }
+
+    .timerValue {
+      font-size: 7rem;
+      font-weight: 800;
+      color: var(--main-color);
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 30px
+        color-mix(in srgb, var(--main-color) 20%, transparent);
+      order: 2;
+    }
+
+    &.urgent {
+      .timerValue {
+        color: var(--error-color);
+        animation: urgentPulse 1s ease-in-out infinite;
+      }
+
+      .timerLabel {
+        color: var(--error-color);
+      }
+    }
+  }
+
+  // ============ ANIMATIONS ============
+  @keyframes dotWave {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+    }
+
+    30% {
+      transform: translateY(-0.5em);
+    }
+  }
+
+  @keyframes crownBounce {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-30deg);
+    }
+
+    50% {
+      transform: translateY(-8px) rotate(-30deg);
+    }
+  }
+
+  .player2 .crown {
+    animation-name: crownBounceRight;
+  }
+
+  @keyframes crownBounceRight {
+    0%,
+    100% {
+      transform: translateY(0) rotate(30deg);
+    }
+
+    50% {
+      transform: translateY(-8px) rotate(30deg);
+    }
+  }
+
+  @keyframes urgentPulse {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 0.8;
+      transform: scale(1.05);
+    }
+  }
+}
+
+// ============ RESPONSIVE DESIGN ============
+@media (max-width: 1000px) {
+  .pageDuelLeaderboard {
+    .playersSection {
+      grid-template-columns: 1fr;
+      gap: 4rem;
+    }
+
+    .playerCard {
+      .wpmContainer .wpmValue {
+        font-size: 6rem;
+      }
+
+      .name {
+        font-size: 3rem;
+      }
+    }
+  }
+}
