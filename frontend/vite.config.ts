@@ -33,6 +33,9 @@ export default defineConfig(({ mode }): UserConfig => {
   // Load .env.tribedev when mode is 'tribedev'
   const envFile = mode === "tribedev" ? ".env.tribedev" : "";
   const env = loadEnv(mode, process.cwd(), ["", envFile]);
+  Object.entries(env).forEach(([key, value]) => {
+    console.log(`${key}: ${value}`);
+  });
 
   const useSentry = env["SENTRY"] !== undefined;
   const isDevelopment = mode !== "production" && mode !== "tribedev";
