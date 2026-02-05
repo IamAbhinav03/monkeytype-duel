@@ -85,26 +85,44 @@
           flex-direction: column;
           gap: 0.5rem;
           width: 100%;
-        }
 
-        .leaderboardRow {
-          background-color: var(--sub-alt-color);
-          border-radius: calc(var(--roundness) / 2);
-          color: var(--text-color);
-          position: relative;
+          .leaderboardRow {
+            background: linear-gradient(
+              135deg,
+              var(--sub-alt-color) 0%,
+              rgba(255, 255, 255, 0.02) 100%
+            );
+            border-radius: calc(var(--roundness) / 2);
+            color: var(--text-color);
+            position: relative;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
 
-          // Essential for transforms
-          transform-origin: center;
-          will-change: transform, box-shadow;
+            // Essential for transforms
+            transform-origin: center;
+            will-change: transform, box-shadow;
+            transition:
+              background 0.3s ease,
+              border-color 0.3s ease;
 
-          .avatarNameBadge {
-            display: flex;
-            gap: 0.5em;
-            align-items: center;
-            .avatar {
-              width: 1.2em;
-              height: 1.2em;
-              color: var(--sub-color);
+            &:hover {
+              background: linear-gradient(
+                135deg,
+                var(--sub-alt-color) 0%,
+                rgba(255, 255, 255, 0.06) 100%
+              );
+              border-color: rgba(255, 255, 255, 0.1);
+            }
+
+            .avatarNameBadge {
+              display: flex;
+              gap: 0.5em;
+              align-items: center;
+              .avatar {
+                width: 1.2em;
+                height: 1.2em;
+                color: var(--sub-color);
+              }
             }
           }
         }

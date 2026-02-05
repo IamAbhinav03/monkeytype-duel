@@ -10,6 +10,12 @@ type LeaderboardEntry = {
   date: number;
 };
 
+// ========== CONFIGURATION ==========
+const USE_DUMMY_DATA = true; // Set to false to use production data
+const DUMMY_DATA_PATH = "/data/dummy-participants.json";
+const PROD_DATA_PATH = "/data/participants.json"; // Update with your production path
+// ====================================
+
 // State
 let entries: LeaderboardEntry[] = [];
 
@@ -115,18 +121,18 @@ function update(updatedEntry: LeaderboardEntry): void {
         if (isTarget) {
           row.native.style.zIndex = "100";
           row.native.style.position = "relative";
-          // Grow -> Glide -> Settle
+          // Elegant Grow -> Glide -> Settle
           row.animate({
-            translateY: [delta, delta, 0],
-            scale: [1, 1.1, 1.1, 1],
+            translateY: [delta, delta * 0.3, 0],
+            scale: [1, 1.03, 1.03, 1], // Subtle, refined scale
             boxShadow: [
-              "0 0 0 0 rgba(0,0,0,0)",
-              "0 15px 30px rgba(0,200,255,0.4)",
-              "0 15px 30px rgba(0,200,255,0.4)",
-              "0 0 0 0 rgba(0,0,0,0)",
+              "0 0 0 0 transparent",
+              "0 8px 32px rgba(255,255,255,0.15), 0 4px 16px rgba(100,200,255,0.2)", // Soft ethereal glow
+              "0 8px 32px rgba(255,255,255,0.15), 0 4px 16px rgba(100,200,255,0.2)",
+              "0 0 0 0 transparent",
             ],
-            duration: 900,
-            easing: "easeOutQuint",
+            duration: 1000,
+            easing: "easeOutExpo", // Smooth, premium feel
           });
         } else {
           // Simple slide for others
@@ -149,52 +155,13 @@ export const page = new Page({
   element: qs("#pageRbhLeaderboard") as ElementWithUtils,
   path: "/rbh/leaderboard",
   afterShow: async () => {
-    // DUMMY DATA HARNESS
-    const testData: LeaderboardEntry[] = [
-      {
-        name: "Verstappen",
-        wpm: 180,
-        acc: 99,
-        raw: 185,
-        consistency: 98,
-        date: 1700000000000,
-      },
-      {
-        name: "Norris",
-        wpm: 175,
-        acc: 98,
-        raw: 180,
-        consistency: 97,
-        date: 1700000000000,
-      },
-      {
-        name: "Leclerc",
-        wpm: 170,
-        acc: 99,
-        raw: 175,
-        consistency: 96,
-        date: 1700000000000,
-      },
-      {
-        name: "Hamilton",
-        wpm: 165,
-        acc: 97,
-        raw: 170,
-        consistency: 99,
-        date: 1700000000000,
-      },
-      {
-        name: "Piastri",
-        wpm: 160,
-        acc: 98,
-        raw: 165,
-        consistency: 95,
-        date: 1700000000000,
-      },
-    ];
+    // Fetch participants based on data source flag
+    const dataPath = USE_DUMMY_DATA ? DUMMY_DATA_PATH : PROD_DATA_PATH;
+    const response = await fetch(dataPath);
+    const participants = (await response.json()) as LeaderboardEntry[];
 
-    // 1. Init with Empty stats (Sorted alphabetically for neutrality)
-    const placeholders = testData
+    // 1. Init with placeholder stats (sorted alphabetically for neutrality)
+    const placeholders = participants
       .map((d) => ({
         ...d,
         wpm: -1,
@@ -207,29 +174,31 @@ export const page = new Page({
 
     init(placeholders);
 
-    // 2. Reveal stats one by one
-    testData.forEach((realEntry, idx) => {
-      setTimeout(
-        () => {
-          update(realEntry);
-        },
-        1000 + idx * 800,
-      );
-    });
+    // 2. Simulate data population (only in dummy mode)
+    if (USE_DUMMY_DATA) {
+      participants.forEach((realEntry, idx) => {
+        setTimeout(
+          () => {
+            update(realEntry);
+          },
+          1000 + idx * 800,
+        );
+      });
 
-    // 3. Simulate Overtake
-    const hamiltonEntry = testData[3];
-    if (hamiltonEntry) {
-      setTimeout(() => {
-        update({
-          name: hamiltonEntry.name,
-          wpm: 200,
-          acc: hamiltonEntry.acc,
-          raw: hamiltonEntry.raw,
-          consistency: hamiltonEntry.consistency,
-          date: hamiltonEntry.date,
-        }); // Hamilton gets fast
-      }, 7000);
+      // 3. Simulate overtake
+      const hamiltonEntry = participants.find((p) => p.name === "Hamilton");
+      if (hamiltonEntry) {
+        setTimeout(() => {
+          update({
+            name: hamiltonEntry.name,
+            wpm: 200,
+            acc: hamiltonEntry.acc,
+            raw: hamiltonEntry.raw,
+            consistency: hamiltonEntry.consistency,
+            date: hamiltonEntry.date,
+          });
+        }, 7000);
+      }
     }
   },
 });
