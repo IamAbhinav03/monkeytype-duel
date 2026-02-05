@@ -1,0 +1,79 @@
+<div class="page pageDuelLeaderboard hidden" id="pageDuelLeaderboard">
+  <div class="content">
+    <!-- Tug of War Section -->
+    <div class="tugOfWar">
+      <div class="ropeContainer">
+        <!-- The rope itself which will get thinner -->
+        <!-- The rope split into two sides for rounded ends + pinch -->
+        <div class="rope">
+          <div class="leftSide"></div>
+          <div class="rightSide"></div>
+        </div>
+        <!-- Marker removed -->
+      </div>
+    </div>
+
+    <!-- Players Section -->
+    <div class="playersSection">
+      <!-- Player 1 (Left) -->
+      <div class="playerCard player1" data-player="1">
+        <!-- Crown moved here, relative to card -->
+        <div class="crown hidden">
+          <i class="fas fa-crown"></i>
+        </div>
+
+        <div class="playerInfo">
+          <div class="playerNameContainer">
+            <span class="name">DemoPlayer1</span>
+          </div>
+          <div class="wpmContainer">
+            <div class="wpmValue">0</div>
+            <div class="wpmLabel">Words per minute</div>
+          </div>
+        </div>
+        <div class="waitingState hidden">
+          <span class="waitingText">Waiting for player</span>
+          <span class="dots">
+            <span class="dot">.</span>
+            <span class="dot">.</span>
+            <span class="dot">.</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Player 2 (Right) -->
+      <div class="playerCard player2" data-player="2">
+        <!-- Crown moved here, relative to card -->
+        <div class="crown hidden">
+          <i class="fas fa-crown"></i>
+        </div>
+
+        <div class="playerInfo">
+          <div class="playerNameContainer">
+            <span class="name">DemoPlayer2</span>
+          </div>
+          <div class="wpmContainer">
+            <div class="wpmValue">0</div>
+            <div class="wpmLabel">Words per minute</div>
+          </div>
+        </div>
+        <div class="waitingState hidden">
+          <span class="waitingText">Waiting for player</span>
+          <span class="dots">
+            <span class="dot">.</span>
+            <span class="dot">.</span>
+            <span class="dot">.</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timer Section (Below Players) -->
+    <div class="timerSection">
+      <div class="timerDisplay">
+        <div class="timerLabel">Time Left</div>
+        <div class="timerValue">60</div>
+      </div>
+    </div>
+  </div>
+</div>

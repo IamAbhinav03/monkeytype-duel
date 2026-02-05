@@ -17,6 +17,7 @@ export type PageName =
   | "rbhProfile"
   | "rbhLoadingScreen"
   | "rbhLeaderboard"
+  | "duelLeaderboard"
   | "profile"
   | "profileSearch"
   | "404"

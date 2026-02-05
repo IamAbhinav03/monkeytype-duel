@@ -11,6 +11,7 @@ import * as PageWaiting from "../pages/rbh/waiting";
 import * as PageRbhProfile from "../pages/rbh/profile";
 import * as PageRbhLoadingScreen from "../pages/rbh/loading-screen";
 import * as PageRbhLeaderboard from "../pages/rbh/leaderboard";
+import * as PageDuelLeaderboard from "../pages/rbh/duel-leaderboard";
 import * as PageLoading from "../pages/loading";
 import * as PageTribe from "../pages/tribe";
 import * as PageProfile from "../pages/profile";
@@ -201,6 +202,7 @@ export async function change(
     rbhProfile: PageRbhProfile.page,
     rbhLoadingScreen: PageRbhLoadingScreen.page,
     rbhLeaderboard: PageRbhLeaderboard.page,
+    duelLeaderboard: PageDuelLeaderboard.page,
     tribe: PageTribe.page,
     profile: PageProfile.page,
     profileSearch: PageProfileSearch.page,
