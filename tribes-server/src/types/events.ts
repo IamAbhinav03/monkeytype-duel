@@ -10,6 +10,16 @@ import type {
   SystemStats,
 } from "./room.js";
 import type { RoomConfig } from "./config.js";
+import type { DuelSide } from "../config.js";
+
+/**
+ * Response format for duel acknowledgments
+ */
+export interface DuelAckResponse {
+  ok: boolean;
+  error?: string;
+  data?: unknown;
+}
 
 // Client -> Server Events
 /**
@@ -92,6 +102,24 @@ export type ClientToServerEvents = {
 
   // Dev events
   dev_room: () => void;
+
+  // Duel events
+  duel_register_system: (
+    data: { side: DuelSide },
+    callback: (response: DuelAckResponse) => void,
+  ) => void;
+  duel_authenticate: (
+    data: { otp: string },
+    callback: (response: DuelAckResponse) => void,
+  ) => void;
+  duel_practice_complete: (
+    callback: (response: DuelAckResponse) => void,
+  ) => void;
+  duel_join_lobby: (callback: (response: DuelAckResponse) => void) => void;
+  duel_time_sync: (
+    data: { clientTime: number },
+    callback: (response: { clientTime: number; serverTime: number }) => void,
+  ) => void;
 };
 
 // Server -> Client Events
@@ -132,7 +160,7 @@ export type ServerToClientEvents = {
   }) => void;
 
   // Race events
-  room_init_race: (data: { seed: number }) => void;
+  room_init_race: (data: { seed: number; startAt?: number }) => void;
   room_countdown: (data: { time: number }) => void;
   room_race_started: () => void;
   room_progress_update: (data: {
@@ -156,6 +184,15 @@ export type ServerToClientEvents = {
 
   // User events
   user_update_name: (data: { name: string }) => void;
+
+  // Duel events
+  duel_opponent_joined: (data: { username: string; side: DuelSide }) => void;
+  duel_opponent_left: (data: { side: DuelSide }) => void;
+  duel_race_scheduled: (data: {
+    startAt: number;
+    seed: number;
+    raceDuration: number;
+  }) => void;
 };
 
 // Inter-server events (none for now)

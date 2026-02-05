@@ -1,5 +1,6 @@
 import type { Server } from "socket.io";
 import { roomStore } from "../stores/room-store.js";
+import { duelStore } from "../stores/duel-store.js";
 import { timerService, TimerType } from "./timer-service.js";
 import {
   calculateFinalPositions,
@@ -19,6 +20,7 @@ import type {
   SocketData,
 } from "../types/events.js";
 import { generateSeed } from "../utils/id-generator.js";
+import { DUEL_CONFIG } from "../config.js";
 import Logger from "../utils/logger.js";
 
 type TribesServer = Server<
@@ -103,6 +105,15 @@ function handleStateEntry(
 }
 
 function handleRaceInit(io: TribesServer, room: Room): void {
+  // Duel rooms use duel_race_scheduled for race orchestration instead of
+  // the standard room_init_race flow. Skip the standard flow entirely.
+  if (room.type === "duel") {
+    Logger.info(
+      `Skipping standard handleRaceInit for duel room ${room.id} — duel-service handles race scheduling`,
+    );
+    return;
+  }
+
   room.seed = generateSeed();
   room.maxRaw = 0;
   room.maxWpm = 0;
@@ -285,6 +296,16 @@ export function updateProgress(
   };
   user.isTyping = true;
   user.isAfk = progress.afk;
+
+  // Update duel store live WPM if this is a duel room
+  if (room.type === "duel") {
+    duelStore.updateLiveWpm(socketId, {
+      wpm: progress.wpm,
+      raw: progress.raw,
+      acc: progress.acc,
+      progress: progress.progress,
+    });
+  }
 }
 
 export function submitResult(
@@ -317,6 +338,37 @@ export function submitResult(
     room.state !== "RACE_AWAITING_RESULTS"
   ) {
     transitionRoom(io, room.id, "RACE_AWAITING_RESULTS");
+
+    // For duel rooms, record paired result when both finish
+    if (room.type === "duel") {
+      const L = duelStore.getParticipant("L");
+      const R = duelStore.getParticipant("R");
+
+      if (L && R) {
+        const LUser = room.users[L.socketId];
+        const RUser = room.users[R.socketId];
+
+        if (LUser?.result && RUser?.result) {
+          duelStore.addResult(
+            {
+              wpm: LUser.result.wpm,
+              raw: LUser.result.raw,
+              acc: LUser.result.acc,
+              consistency: LUser.result.consistency,
+            },
+            {
+              wpm: RUser.result.wpm,
+              raw: RUser.result.raw,
+              acc: RUser.result.acc,
+              consistency: RUser.result.consistency,
+            },
+          );
+          Logger.info(
+            `Duel result recorded: L=${LUser.result.wpm}wpm, R=${RUser.result.wpm}wpm`,
+          );
+        }
+      }
+    }
   }
 }
 

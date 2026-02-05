@@ -16,7 +16,7 @@ export type RoomConfig = {
   difficulty: "normal" | "expert" | "master";
   punctuation: boolean;
   numbers: boolean;
-  funbox: string;
+  funbox: string[];
   lazyMode: boolean;
   stopOnError: "off" | "word" | "letter";
   minWpm: "off" | "custom";
@@ -38,7 +38,7 @@ export function getDefaultRoomConfig(): RoomConfig {
     difficulty: "normal",
     punctuation: false,
     numbers: false,
-    funbox: "none",
+    funbox: [],
     lazyMode: false,
     stopOnError: "off",
     minWpm: "off",
@@ -49,7 +49,7 @@ export function getDefaultRoomConfig(): RoomConfig {
     minBurstCustomSpeed: 0,
     quoteLength: [1, 2],
     customText: {
-      text: [],
+      text: [""],
       isWordRandom: false,
       isTimeRandom: false,
       word: 0,

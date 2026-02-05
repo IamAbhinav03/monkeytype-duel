@@ -4,10 +4,6 @@ import { io } from "socket.io-client";
 function getTribesServerUrl(): string {
   const hostname = window.location.hostname;
 
-  // if (hostname === "monkeytype.com" || hostname === "www.monkeytype.com") {
-  //   return "https://tribe.monkeytype.com";
-  // }
-
   // Production
   if (
     hostname === "monkeytype.rbh.makerspace.tools" ||
@@ -16,7 +12,7 @@ function getTribesServerUrl(): string {
     return "https://tribe.monkeytype.rbh.makerspace.tools";
   }
 
-  // Deployment
+  // Dev/Test deployment
   if (
     hostname === "monkeytype-test.rbh.makerspace.tools" ||
     hostname === "www.monkeytype-test.rbh.makerspace.tools"
@@ -24,7 +20,7 @@ function getTribesServerUrl(): string {
     return "https://tribe.monkeytype-test.rbh.makerspace.tools";
   }
 
-  // Development - use same host as frontend but on port 3005
+  // Local development - use same host as frontend but on port 3005
   // This works for localhost, 127.0.0.1, and LAN IPs (e.g., 192.168.x.x)
   return `http://${hostname}:3005`;
 }

@@ -28,6 +28,7 @@ export function envConfig(options: {
           quickLoginEmail: options.env["QUICK_LOGIN_EMAIL"],
           quickLoginPassword: options.env["QUICK_LOGIN_PASSWORD"],
           forceTribe: options.env["FORCE_TRIBE"] === "true",
+          forceDuel: options.env["FORCE_DUEL"] === "true",
         };
 
         const prodConfig: EnvConfig = {
@@ -41,6 +42,7 @@ export function envConfig(options: {
           quickLoginPassword: undefined,
           clientVersion: options.clientVersion,
           forceTribe: options.env["FORCE_TRIBE"] === "true",
+          forceDuel: options.env["FORCE_DUEL"] === "true",
         };
 
         const envConfig = options.isDevelopment ? devConfig : prodConfig;

@@ -23,6 +23,7 @@ jobs:
           cat > docker/.env << EOF
           HTTP_PORT=8080
           BACKEND_PORT=5005
+          TRIBES_PORT=3005
           MONKEYTYPE_FRONTENDURL=https://monkeytype-test.rbh.makerspace.tools
           MONKEYTYPE_BACKENDURL=https://api.monkeytype-test.rbh.makerspace.tools
           RECAPTCHA_SITE_KEY=${{ secrets.RECAPTCHA_SITE_KEY }}
@@ -35,13 +36,15 @@ jobs:
           FIREBASE_APPID=${{ secrets.FIREBASE_APPID }}
           EOF
 
-      - name: Create frontend .env file
+      - name: Create frontend .env.tribedev file
         run: |
-          rm -f frontend/.env
-          cat > frontend/.env << EOF
-          FORCE_TRIBE=true
-          EOF
+          rm -f frontend/.env.tribedev
+          echo 'BACKEND_URL=###MONKEYTYPE_BACKENDURL###' >> frontend/.env.tribedev
+          echo 'RECAPTCHA_SITE_KEY=###RECAPTCHA_SITE_KEY###' >> frontend/.env.tribedev
+          echo 'FORCE_TRIBE=true' >> frontend/.env.tribedev
+          echo 'FORCE_DUEL=true' >> frontend/.env.tribedev
 
       - name: Deploy to dev
         run: |
-          docker compose -f docker/docker-compose.yml up -d --build
+          docker compose -f docker/docker-compose.yml build --no-cache
+          docker compose -f docker/docker-compose.yml up -d --force-recreate

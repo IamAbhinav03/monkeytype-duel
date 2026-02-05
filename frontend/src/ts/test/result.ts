@@ -31,6 +31,7 @@ import * as TribeUserList from "../tribe/tribe-user-list";
 import * as TribeButtons from "../tribe/tribe-buttons";
 import * as TribeChat from "../tribe/tribe-chat";
 import * as TribeChartController from "../tribe/tribe-chart-controller";
+import * as DuelState from "../tribe/duel/duel-state";
 import * as ConfigEvent from "../observables/config-event";
 import * as Focus from "./focus";
 import * as CustomText from "./custom-text";
@@ -1171,6 +1172,17 @@ export async function update(
 }
 
 export function updateTribeElements(): void {
+  // During duel practice/countdown flow, hide all action buttons
+  if (DuelState.shouldBlockUI()) {
+    qs("#result #tribeResultBottom")?.hide();
+    qs("#result #restartTestButtonWithSameWordset")?.hide();
+    qs("#result #practiseWordsButton")?.hide();
+    qs("#result #nextTestButton")?.hide();
+    qs("#result #backToLobbyButton")?.hide();
+    qs("#result #readyButton")?.hide();
+    return;
+  }
+
   if (TribeState.isInARoom()) {
     qs("#result #tribeResultBottom")?.show();
     qs("#result #restartTestButtonWithSameWordset")?.hide();

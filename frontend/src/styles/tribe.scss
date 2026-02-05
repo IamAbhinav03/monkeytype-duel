@@ -30,6 +30,161 @@
         width: 10rem;
       }
     }
+    &.system {
+      display: grid;
+      place-items: center;
+      height: 100%;
+      .systemSelect {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2rem;
+        .title {
+          font-size: 2rem;
+          color: var(--main-color);
+        }
+        .subtitle {
+          color: var(--sub-color);
+        }
+        .buttons {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 2rem;
+          .sideButton {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            padding: 3rem 4rem;
+            background: var(--sub-alt-color);
+            border: 2px solid transparent;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            &:hover {
+              border-color: var(--main-color);
+              background: var(--bg-color);
+            }
+            &.disabled {
+              opacity: 0.5;
+              pointer-events: none;
+            }
+            &.unavailable {
+              opacity: 0.5;
+              .subtext {
+                color: var(--error-color);
+              }
+            }
+            .icon {
+              font-size: 3rem;
+              color: var(--main-color);
+            }
+            .text {
+              font-size: 1.5rem;
+              color: var(--text-color);
+            }
+            .subtext {
+              color: var(--sub-color);
+            }
+          }
+        }
+      }
+    }
+    &.otp {
+      display: grid;
+      place-items: center;
+      height: 100%;
+      .otpAuth {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+        text-align: center;
+        .title {
+          font-size: 2rem;
+          color: var(--main-color);
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          i {
+            font-size: 1.5rem;
+          }
+        }
+        .subtitle {
+          color: var(--sub-color);
+          font-size: 1rem;
+          margin-top: -1rem;
+        }
+        .currentSide {
+          color: var(--sub-color);
+          font-size: 1.2rem;
+          padding: 0.5rem 1rem;
+          background: var(--sub-alt-color);
+          border-radius: 0.25rem;
+        }
+        form {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 1.5rem;
+          .otpInputs {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0.75rem;
+            .otpDigit {
+              width: 4rem;
+              height: 5rem;
+              font-size: 2rem;
+              text-align: center;
+              background: var(--bg-color);
+              color: var(--text-color);
+              border: 2px solid var(--sub-alt-color);
+              border-radius: var(--roundness);
+              outline: none;
+              transition: all 0.15s;
+              &:focus {
+                border-color: var(--main-color);
+                background: var(--sub-alt-color);
+              }
+              &:hover:not(:focus):not(:disabled) {
+                border-color: var(--sub-color);
+              }
+              &:disabled {
+                opacity: 0.5;
+              }
+            }
+          }
+          .submitButton {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            background: var(--main-color);
+            color: var(--bg-color);
+            border: none;
+            border-radius: var(--roundness);
+            cursor: pointer;
+            font-size: 1rem;
+            min-width: 200px;
+            &:hover {
+              filter: brightness(1.1);
+            }
+            &:disabled {
+              opacity: 0.7;
+              cursor: not-allowed;
+            }
+          }
+        }
+        .errorMessage {
+          color: var(--error-color);
+          font-size: 0.9rem;
+          &.hidden {
+            display: none;
+          }
+        }
+      }
+    }
     &.menu {
       user-select: none;
       display: grid;
@@ -671,6 +826,32 @@
       opacity: 0.25;
     }
   }
+
+  // Duel race countdown (displayed in live stats area)
+  #typingTest #liveStatsMini .tribeCountdown2 {
+    font-size: 3rem;
+    font-weight: bold;
+    color: var(--main-color);
+    text-align: center;
+    padding: 0.5rem 1rem;
+    user-select: none;
+    pointer-events: none;
+    animation: duelCountdownPulse 1s ease-in-out infinite;
+
+    &.hidden {
+      display: none;
+    }
+  }
+
+  @keyframes duelCountdownPulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
 }
 
 .pageTest #typingTest #tribeDeltaBar {
@@ -803,5 +984,74 @@
   }
   &.size3 {
     margin-bottom: 4rem;
+  }
+}
+
+// Duel countdown below results
+#duelResultCountdown {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2rem;
+  padding: 1.5rem 3rem;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+
+  &.active {
+    display: flex;
+    opacity: 1;
+  }
+
+  .duelCountdownMessage {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: var(--sub-color);
+  }
+
+  .duelCountdownTimer {
+    font-size: 4rem;
+    font-weight: bold;
+    color: var(--main-color);
+  }
+}
+
+// During duel flow - hide navigation and prevent escape
+body.duelFlowActive {
+  // Hide header navigation
+  header {
+    pointer-events: none;
+    opacity: 0.3;
+
+    nav {
+      display: none;
+    }
+  }
+
+  // Hide logo click
+  #top .logo {
+    pointer-events: none;
+  }
+
+  // Hide bottom navigation
+  footer,
+  #bottom {
+    display: none;
+  }
+
+  // Hide command line trigger
+  #commandLineTrigger {
+    display: none;
+  }
+
+  // Hide test config on result page
+  .pageTest #result .stats .group.testType {
+    pointer-events: none;
+  }
+
+  // Hide "Sign in to save your result" tip
+  .pageTest #result .loginTip {
+    display: none;
   }
 }

@@ -48,6 +48,7 @@ import {
 import * as MonkeyPower from "../elements/monkey-power";
 import * as SlowTimer from "../states/slow-timer";
 import * as TestConfig from "./test-config";
+import * as DuelState from "../tribe/duel/duel-state";
 import * as CompositionDisplay from "../elements/composition-display";
 import * as AdController from "../controllers/ad-controller";
 import * as LayoutfluidFunboxTimer from "../test/funbox/layoutfluid-funbox-timer";
@@ -1660,6 +1661,12 @@ function updateLiveStatsColor(value: TimerColor): void {
 }
 
 function showHideTestRestartButton(showHide: boolean): void {
+  // Always hide during duel practice/countdown
+  if (DuelState.shouldBlockUI()) {
+    $(".pageTest #restartTestButton").addClass("hidden");
+    return;
+  }
+
   if (showHide) {
     $(".pageTest #restartTestButton").removeClass("hidden");
   } else {

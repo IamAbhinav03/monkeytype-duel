@@ -94,6 +94,8 @@ export type User = {
   points?: number;
 };
 
+export type RoomType = "standard" | "duel";
+
 export type Room = {
   id: string;
   state: RoomState;
@@ -108,6 +110,9 @@ export type Room = {
   minRaw: number;
   minWpm: number;
   seed: number;
+  // Duel-specific fields
+  type?: RoomType;
+  startAt?: number; // Server timestamp for synchronized start
 };
 
 export type PublicRoomData = {
