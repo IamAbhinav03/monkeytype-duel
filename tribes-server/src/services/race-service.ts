@@ -1,5 +1,6 @@
 import type { Server } from "socket.io";
 import { roomStore } from "../stores/room-store.js";
+import { duelStore } from "../stores/duel-store.js";
 import { timerService, TimerType } from "./timer-service.js";
 import {
   calculateFinalPositions,
@@ -19,6 +20,7 @@ import type {
   SocketData,
 } from "../types/events.js";
 import { generateSeed } from "../utils/id-generator.js";
+import { DUEL_CONFIG } from "../config.js";
 import Logger from "../utils/logger.js";
 
 type TribesServer = Server<
@@ -118,7 +120,17 @@ function handleRaceInit(io: TribesServer, room: Room): void {
     user.progress = undefined;
   });
 
-  io.to(room.id).emit("room_init_race", { seed: room.seed });
+  // For duel rooms, calculate startAt for synchronized start
+  if (room.type === "duel") {
+    room.startAt = Date.now() + DUEL_CONFIG.START_DELAY_MS;
+    io.to(room.id).emit("room_init_race", {
+      seed: room.seed,
+      startAt: room.startAt,
+    });
+    Logger.info(`Duel race init: seed=${room.seed}, startAt=${room.startAt}`);
+  } else {
+    io.to(room.id).emit("room_init_race", { seed: room.seed });
+  }
 
   // Transition to countdown after a brief delay
   setTimeout(() => {
@@ -285,6 +297,16 @@ export function updateProgress(
   };
   user.isTyping = true;
   user.isAfk = progress.afk;
+
+  // Update duel store live WPM if this is a duel room
+  if (room.type === "duel") {
+    duelStore.updateLiveWpm(socketId, {
+      wpm: progress.wpm,
+      raw: progress.raw,
+      acc: progress.acc,
+      progress: progress.progress,
+    });
+  }
 }
 
 export function submitResult(
@@ -317,6 +339,37 @@ export function submitResult(
     room.state !== "RACE_AWAITING_RESULTS"
   ) {
     transitionRoom(io, room.id, "RACE_AWAITING_RESULTS");
+
+    // For duel rooms, record paired result when both finish
+    if (room.type === "duel") {
+      const L = duelStore.getParticipant("L");
+      const R = duelStore.getParticipant("R");
+
+      if (L && R) {
+        const LUser = room.users[L.socketId];
+        const RUser = room.users[R.socketId];
+
+        if (LUser?.result && RUser?.result) {
+          duelStore.addResult(
+            {
+              wpm: LUser.result.wpm,
+              raw: LUser.result.raw,
+              acc: LUser.result.acc,
+              consistency: LUser.result.consistency,
+            },
+            {
+              wpm: RUser.result.wpm,
+              raw: RUser.result.raw,
+              acc: RUser.result.acc,
+              consistency: RUser.result.consistency,
+            },
+          );
+          Logger.info(
+            `Duel result recorded: L=${LUser.result.wpm}wpm, R=${RUser.result.wpm}wpm`,
+          );
+        }
+      }
+    }
   }
 }
 

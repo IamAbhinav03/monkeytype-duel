@@ -9,8 +9,13 @@ import * as Notifications from "../elements/notifications";
 import tribeSocket from "../tribe/tribe-socket";
 import { setAutoJoin } from "../tribe/tribe-auto-join";
 import * as NavigationEvent from "../observables/navigation-event";
-import { getAwaitedTribeMode, getTribeMode } from "../utils/tribe";
+import {
+  getAwaitedTribeMode,
+  getTribeMode,
+  isDuelModeEnabled,
+} from "../utils/tribe";
 import { ROOM_STATE } from "../tribe/types";
+import * as DuelState from "../tribe/duel/duel-state";
 
 //source: https://www.youtube.com/watch?v=OstALBk-jTc
 // https://www.youtube.com/watch?v=OstALBk-jTc
@@ -81,6 +86,12 @@ const routes: Route[] = [
           tribeOverride: options?.tribeOverride ?? false,
           force: options?.force ?? false,
         });
+        return;
+      }
+
+      // In duel mode, default to /tribe
+      if (isDuelModeEnabled()) {
+        await navigate("/tribe", options);
         return;
       }
 
@@ -287,6 +298,20 @@ export async function navigate(
     window.location.hash,
   options = {} as NavigationEvent.NavigateOptions,
 ): Promise<void> {
+  // Block all navigation during duel flow except allowed paths
+  if (
+    isDuelModeEnabled() &&
+    DuelState.shouldBlockUI() &&
+    !options?.tribeOverride
+  ) {
+    // Only allow "/" (test page) and "/tribe" during duel practice flow
+    const cleanUrl = url.replace(/\/$/, "") || "/";
+    if (cleanUrl !== "/" && cleanUrl !== "/tribe") {
+      console.log(`[DuelFlow] Navigation to ${url} blocked during duel flow`);
+      return;
+    }
+  }
+
   if (
     getTribeMode() !== "disabled" &&
     TribeState.isInARoom() &&

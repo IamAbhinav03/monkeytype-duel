@@ -7,6 +7,93 @@
     <div class="subtext"></div>
     <button class="reconnectButton hidden">Reconnect</button>
   </div>
+  <!-- System L/R Selection Page -->
+  <div class="tribePage system hidden">
+    <div class="systemSelect">
+      <div class="title">Select Your System</div>
+      <div class="subtitle">Choose which side you are controlling</div>
+      <div class="buttons">
+        <button class="sideButton" data-side="L">
+          <div class="icon"><i class="fas fa-arrow-left"></i></div>
+          <div class="text">System L</div>
+          <div class="subtext">Left Side</div>
+        </button>
+        <button class="sideButton" data-side="R">
+          <div class="icon"><i class="fas fa-arrow-right"></i></div>
+          <div class="text">System R</div>
+          <div class="subtext">Right Side</div>
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- OTP Authentication Page -->
+  <div class="tribePage otp hidden">
+    <div class="otpAuth">
+      <div class="title">
+        <i class="fas fa-lock"></i>
+        Enter Your Code
+      </div>
+      <div class="subtitle">Please enter the 6-digit code</div>
+      <div class="currentSide">System ?</div>
+      <form>
+        <div class="otpInputs">
+          <input
+            type="text"
+            maxlength="1"
+            class="otpDigit"
+            data-index="0"
+            autocomplete="off"
+            inputmode="numeric"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            class="otpDigit"
+            data-index="1"
+            autocomplete="off"
+            inputmode="numeric"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            class="otpDigit"
+            data-index="2"
+            autocomplete="off"
+            inputmode="numeric"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            class="otpDigit"
+            data-index="3"
+            autocomplete="off"
+            inputmode="numeric"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            class="otpDigit"
+            data-index="4"
+            autocomplete="off"
+            inputmode="numeric"
+          />
+          <input
+            type="text"
+            maxlength="1"
+            class="otpDigit"
+            data-index="5"
+            autocomplete="off"
+            inputmode="numeric"
+          />
+        </div>
+        <button type="submit" class="submitButton">
+          <i class="fas fa-sign-in-alt"></i>
+          Authenticate
+        </button>
+      </form>
+      <div class="errorMessage hidden"></div>
+    </div>
+  </div>
   <div class="tribePage menu hidden">
     <div class="welcome">
       <div class="text">

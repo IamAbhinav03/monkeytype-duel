@@ -22,7 +22,7 @@ import TribeSocket from "./tribe-socket";
 import * as ActivePage from "../states/active-page";
 import * as TribeState from "./tribe-state";
 import { escapeRegExp, escapeHTML, isDevEnvironment } from "../utils/misc";
-import { getTribeMode } from "../utils/tribe";
+import { getTribeMode, isDuelModeEnabled } from "../utils/tribe";
 import * as Time from "../states/time";
 import * as TestWords from "../test/test-words";
 import * as TestStats from "../test/test-stats";
@@ -35,6 +35,7 @@ import * as TribeAutoJoin from "./tribe-auto-join";
 import { authPromise } from "../firebase";
 import * as Result from "../test/result";
 import { SimpleModal } from "../utils/simple-modal";
+import * as DuelFlow from "./duel/duel-flow";
 
 const defaultName = "Guest";
 let name = "Guest";
@@ -127,6 +128,22 @@ export async function init(): Promise<void> {
   TribePagePreloader.updateIcon("circle-notch", true);
   TribePagePreloader.updateText("Awaiting authentication");
   await authPromise;
+
+  // Check if duel mode is enabled
+  if (isDuelModeEnabled()) {
+    console.log("[Tribe] Duel mode enabled, initializing duel flow");
+    TribePagePreloader.updateText("Initializing Duel Mode");
+    TribePagePreloader.updateSubtext("Please wait...");
+
+    // Register duel socket handlers
+    DuelFlow.registerSocketHandlers();
+
+    // Initialize duel flow (handles its own socket connection)
+    await DuelFlow.init();
+    return;
+  }
+
+  // Standard tribe flow
   TribePagePreloader.updateText("Connecting to Tribe");
   TribePagePreloader.updateSubtext("Please wait...");
 
@@ -257,6 +274,10 @@ async function connect(): Promise<void> {
 }
 
 TribeSocket.in.system.connect(() => {
+  // In duel mode, duel-flow.ts handles the connect event
+  if (isDuelModeEnabled()) {
+    return;
+  }
   void connect();
 });
 
@@ -273,6 +294,11 @@ TribeSocket.in.user.updateName((e) => {
 });
 
 TribeSocket.in.system.disconnect((reason, details) => {
+  // In duel mode, duel-flow.ts handles the disconnect event
+  if (isDuelModeEnabled()) {
+    return;
+  }
+
   const roomId = TribeState.getRoom()?.id;
   if (roomId !== undefined) {
     TribeAutoJoin.setAutoJoin(roomId);
@@ -310,6 +336,12 @@ TribeSocket.in.system.disconnect((reason, details) => {
 });
 
 TribeSocket.in.system.connectFailed((err) => {
+  // In duel mode, duel-flow.ts handles connection failures
+  if (isDuelModeEnabled()) {
+    console.error("[Tribe] Connection failed in duel mode:", err);
+    return;
+  }
+
   updateClientState(TribeTypes.CLIENT_STATE.DISCONNECTED);
   console.error(err);
   if (!$(".pageTribe").hasClass("active")) {
@@ -331,6 +363,12 @@ TribeSocket.in.system.connectFailed((err) => {
 });
 
 TribeSocket.in.system.connectError((err) => {
+  // In duel mode, duel-flow.ts handles connection errors
+  if (isDuelModeEnabled()) {
+    console.error("[Tribe] Connection error in duel mode:", err);
+    return;
+  }
+
   updateClientState(TribeTypes.CLIENT_STATE.DISCONNECTED);
   console.error(err);
   if (!$(".pageTribe").hasClass("active")) {

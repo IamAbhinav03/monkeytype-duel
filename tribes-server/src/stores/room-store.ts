@@ -16,8 +16,9 @@ class RoomStore {
     leaderName: string,
     config?: Partial<RoomConfig>,
     isPrivate = true,
+    customRoomId?: string,
   ): Room {
-    const roomId = generateRoomId();
+    const roomId = customRoomId ?? generateRoomId();
     const room: Room = {
       id: roomId,
       state: "LOBBY",

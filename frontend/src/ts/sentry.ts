@@ -13,6 +13,13 @@ export async function activateSentry(): Promise<void> {
     console.warn("Sentry already activated");
     return;
   }
+
+  // Skip Sentry initialization entirely in development to avoid 429 errors
+  if (envConfig.isDevelopment) {
+    console.log("Sentry disabled in development mode");
+    return;
+  }
+
   activated = true;
   console.log("Activating Sentry");
 

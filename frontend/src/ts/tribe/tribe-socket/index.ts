@@ -3,6 +3,7 @@ import RoomRoutes from "./routes/room";
 import SystemRoutes from "./routes/system";
 import UserRoutes from "./routes/user";
 import DevRoutes from "./routes/dev";
+import DuelRoutes from "./routes/duel";
 import Socket from "./socket";
 
 function updateName(newName: string): void {
@@ -28,11 +29,13 @@ export default {
     room: RoomRoutes.in,
     system: SystemRoutes.in,
     user: UserRoutes.in,
+    duel: DuelRoutes.in,
   },
   out: {
     room: RoomRoutes.out,
     system: SystemRoutes.out,
     user: UserRoutes.out,
+    duel: DuelRoutes.out,
     ...(isDevEnvironment()
       ? {
           dev: DevRoutes.out,

@@ -42,6 +42,8 @@ import * as Random from "../utils/random";
 import * as TribeState from "../tribe/tribe-state";
 import * as Tribe from "../tribe/tribe";
 import * as TribeTypes from "../tribe/types";
+import * as DuelFlow from "../tribe/duel/duel-flow";
+import * as DuelState from "../tribe/duel/duel-state";
 import * as ConnectionState from "../states/connection";
 import * as KeymapEvent from "../observables/keymap-event";
 import * as LazyModeState from "../states/remember-lazy-mode";
@@ -163,6 +165,12 @@ export function restart(options = {} as RestartOptions): void {
     Notifications.add("No quit funbox is active. Please finish the test.", 0, {
       important: true,
     });
+    options.event?.preventDefault();
+    return;
+  }
+
+  // Block restart during duel practice/countdown flow
+  if (DuelState.shouldBlockUI() && !options.tribeOverride) {
     options.event?.preventDefault();
     return;
   }
@@ -1281,6 +1289,17 @@ export async function finish(difficultyFailed = false): Promise<void> {
   });
 
   await Promise.all([savingResultPromise, resultUpdatePromise]);
+
+  // Check if this was a duel practice test
+  if (DuelFlow.isPracticing()) {
+    console.log(
+      "[TestLogic] Duel practice test completed, notifying duel flow",
+    );
+    void DuelFlow.onPracticeComplete();
+  } else if (DuelFlow.isRacing()) {
+    console.log("[TestLogic] Duel race completed, notifying duel flow");
+    DuelFlow.onDuelRaceComplete();
+  }
 }
 
 type SaveResultResponse = {

@@ -6,6 +6,9 @@ import { qsr } from "../utils/dom";
 import { CLIENT_STATE } from "../tribe/types";
 import tribeSocket from "../tribe/tribe-socket";
 import * as TribePagePreloader from "../tribe/pages/tribe-page-preloader";
+import * as TribePages from "../tribe/tribe-pages";
+import { isDuelModeEnabled } from "../utils/tribe";
+import * as DuelState from "../tribe/duel/duel-state";
 
 /**
  * Tribe page configuration and lifecycle management.
@@ -43,6 +46,13 @@ export const page = new Page({
   afterHide: async () => {
     // TODO: Fill it up later
     TribeChat.reset("lobby");
+
+    // In duel mode, keep socket connected during the entire duel flow
+    if (isDuelModeEnabled() && DuelState.isInDuelFlow()) {
+      console.log("[TribePage] Keeping socket connected during duel flow");
+      return;
+    }
+
     if (!TribeState.isInARoom()) {
       tribeSocket.disconnect();
       TribePagePreloader.reset();
@@ -56,6 +66,13 @@ export const page = new Page({
     }
   },
   afterShow: async () => {
+    // In duel mode with LOBBY state, show the duel lobby page
+    if (isDuelModeEnabled() && DuelState.getFlowState() === "LOBBY") {
+      console.log("[TribePage] Showing duel lobby page");
+      void TribePages.change("lobby");
+      return;
+    }
+
     if (TribeState.getState() === CLIENT_STATE.DISCONNECTED) {
       console.debug("Hello from route-controller /tribe afterShow");
       console.debug("TribeState is disconnected, initializing Tribe");

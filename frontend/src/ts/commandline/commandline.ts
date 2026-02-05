@@ -1,6 +1,7 @@
 import * as Focus from "../test/focus";
 import * as CommandlineLists from "./lists";
 import Config from "../config";
+import * as DuelState from "../tribe/duel/duel-state";
 import * as AnalyticsController from "../controllers/analytics-controller";
 import * as ThemeController from "../controllers/theme-controller";
 import { clearFontPreview } from "../ui";
@@ -79,6 +80,11 @@ export function show(
   settings?: ShowSettings,
   modalShowSettings?: ShowOptions,
 ): void {
+  // Block command line during duel flow
+  if (DuelState.shouldBlockUI()) {
+    return;
+  }
+
   void modal.show({
     ...modalShowSettings,
     focusFirstInput: true,
