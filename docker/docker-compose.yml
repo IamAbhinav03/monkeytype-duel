@@ -122,23 +122,6 @@ services:
       retries: 15
       start_period: 10s
 
-  monkeytype-tribes-server:
-    container_name: monkeytype-tribes-server
-    build:
-      context: ..
-      dockerfile: ./docker/tribes-server/Dockerfile
-    ports:
-      - "${TRIBES_PORT:-3005}:3005"
-    restart: on-failure
-    environment:
-      - PORT=3005
-      - MODE=dev
-      - TRIBES_VERSION=dev
-      - DB_URI=mongodb://monkeytype-mongodb:27017/monkeytype
-    depends_on:
-      monkeytype-mongodb:
-        condition: service_healthy
-
 volumes:
   mongo-data:
     name: monkeytype_mongo_data
