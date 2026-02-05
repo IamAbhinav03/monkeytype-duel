@@ -1,0 +1,110 @@
+<div class="page pageRbhSpectatorScreen hidden" id="pageRbhSpectatorScreen">
+  <!-- Leaderboard View (default visible) -->
+  <div class="view leaderboardView" id="leaderboardView">
+    <div class="content">
+      <div class="tableAndUser">
+        <div class="bigtitle">
+          <div class="text">RBH Keyboard Duel</div>
+        </div>
+        <div class="divider"></div>
+
+        <div class="leaderboardTable">
+          <div class="leaderboardHeader">
+            <div class="col rank">
+              <span>#</span>
+              <i class="fas fa-users"></i>
+            </div>
+            <div class="col name">name</div>
+            <div class="col stat narrow">wpm</div>
+            <div class="col stat narrow">raw</div>
+            <div class="col stat wide">wpm</div>
+            <div class="col stat wide">acc</div>
+            <div class="col stat wide">raw</div>
+            <div class="col stat wide">cons</div>
+            <div class="col date">date</div>
+          </div>
+
+          <div class="leaderboardBody" id="leaderboardBody">
+            <!-- Javascript will inject rows here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duel View (hidden by default) -->
+  <div class="view duelView hidden" id="duelView">
+    <div class="content">
+      <!-- Tug of War Section -->
+      <div class="tugOfWar">
+        <div class="ropeContainer">
+          <div class="rope">
+            <div class="leftSide"></div>
+            <div class="rightSide"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Players Section -->
+      <div class="playersSection">
+        <!-- Player 1 (Left) -->
+        <div class="playerCard player1" data-player="1">
+          <div class="crown hidden">
+            <i class="fas fa-crown"></i>
+          </div>
+
+          <div class="playerInfo">
+            <div class="playerNameContainer">
+              <span class="name">DemoPlayer1</span>
+            </div>
+            <div class="wpmContainer">
+              <div class="wpmValue">0</div>
+              <div class="wpmLabel">Words per minute</div>
+            </div>
+          </div>
+          <div class="waitingState hidden">
+            <span class="waitingText">Waiting for player</span>
+            <span class="dots">
+              <span class="dot">.</span>
+              <span class="dot">.</span>
+              <span class="dot">.</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Player 2 (Right) -->
+        <div class="playerCard player2" data-player="2">
+          <div class="crown hidden">
+            <i class="fas fa-crown"></i>
+          </div>
+
+          <div class="playerInfo">
+            <div class="playerNameContainer">
+              <span class="name">DemoPlayer2</span>
+            </div>
+            <div class="wpmContainer">
+              <div class="wpmValue">0</div>
+              <div class="wpmLabel">Words per minute</div>
+            </div>
+          </div>
+          <div class="waitingState hidden">
+            <span class="waitingText">Waiting for player</span>
+            <span class="dots">
+              <span class="dot">.</span>
+              <span class="dot">.</span>
+              <span class="dot">.</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timer Section -->
+      <div class="timerSection">
+        <div class="timerDisplay">
+          <div class="timerLabel">Time Left</div>
+          <div class="timerValue">60</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

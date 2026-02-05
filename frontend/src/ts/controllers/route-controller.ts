@@ -164,15 +164,9 @@ const routes: Route[] = [
     },
   },
   {
-    path: "/rbh/leaderboard",
+    path: "/rbh/spectator-screen",
     load: async (_params, options) => {
-      await PageController.change("rbhLeaderboard", options);
-    },
-  },
-  {
-    path: "/rbh/duel-leaderboard",
-    load: async (_params, options) => {
-      await PageController.change("duelLeaderboard", options);
+      await PageController.change("rbhSpectatorScreen", options);
     },
   },
   {
