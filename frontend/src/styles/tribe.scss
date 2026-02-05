@@ -827,15 +827,20 @@
     }
   }
 
-  // Duel race countdown (displayed in live stats area)
+  // Duel race countdown (overlaid on typing area)
   #typingTest #liveStatsMini .tribeCountdown2 {
-    font-size: 3rem;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 6rem;
     font-weight: bold;
     color: var(--main-color);
     text-align: center;
-    padding: 0.5rem 1rem;
     user-select: none;
     pointer-events: none;
+    z-index: 100;
+    opacity: 0.85;
     animation: duelCountdownPulse 1s ease-in-out infinite;
 
     &.hidden {
@@ -987,6 +992,75 @@
   }
 }
 
+// EULA page styling
+.tribePage.eula {
+  .eulaContent {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .eulaTitle {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--main-color);
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .eulaBody {
+    color: var(--text-color);
+    font-size: 0.95rem;
+    line-height: 1.7;
+
+    p {
+      margin-bottom: 1rem;
+    }
+
+    ul {
+      list-style: disc;
+      padding-left: 1.5rem;
+      margin-bottom: 1rem;
+
+      li {
+        margin-bottom: 0.5rem;
+      }
+    }
+
+    a {
+      color: var(--main-color);
+      text-decoration: underline;
+    }
+  }
+
+  .eulaFooter {
+    color: var(--sub-color);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+
+  .eulaCountdown {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--sub-alt-color);
+
+    .eulaCountdownMessage {
+      font-size: 1rem;
+      color: var(--sub-color);
+      margin-bottom: 0.25rem;
+    }
+
+    .eulaCountdownTimer {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: var(--main-color);
+    }
+  }
+}
+
 // Duel countdown below results
 #duelResultCountdown {
   display: none;
@@ -1053,5 +1127,249 @@ body.duelFlowActive {
   // Hide "Sign in to save your result" tip
   .pageTest #result .loginTip {
     display: none;
+  }
+
+  // Hide settings/gear icon
+  #top .config,
+  .pageTest .testConfig,
+  .pageTest #testModesNotice {
+    display: none;
+  }
+
+  // Hide notification area during race (less distraction)
+  #notificationCenter {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+
+  // Hide result action buttons that don't apply to duel
+  .pageTest #result .buttons {
+    .saveScreenshotButton,
+    .copyWordsButton,
+    .watchReplayButton,
+    .showWordHistoryButton,
+    .toggleChartButton {
+      display: none;
+    }
+  }
+
+  // Hide tribe bottom section on result page if not needed
+  #result #tribeResultBottom .buttons .startTestButton,
+  #result #tribeResultBottom .buttons .readyButton {
+    display: none;
+  }
+
+  // Hide restart buttons during test
+  #restartTestButton,
+  .pageTest .ssWatermark,
+  .pageTest .pageTest-before-tips {
+    display: none;
+  }
+
+  // Hide caps lock warning
+  #capsWarning {
+    display: none;
+  }
+
+  // Hide lobby elements not needed in duel mode
+  .pageTribe .tribePage.lobby {
+    // Override grid to single centered column
+    grid-template-areas: none !important;
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0 !important;
+
+    .lobbyButtons,
+    .chat,
+    .currentConfig,
+    .userlist,
+    .inviteLink,
+    .tribeBars {
+      display: none !important;
+    }
+  }
+
+  // Hide tribe result bottom chat and buttons
+  #result #tribeResultBottom {
+    .chat,
+    .buttons {
+      display: none;
+    }
+  }
+
+  // Suppress all PSA/warning banners
+  #bannerCenter {
+    display: none !important;
+  }
+}
+
+// Suppress qsr dev warning globally (fires before duelFlowActive is set)
+#domUtilsQsWarning {
+  display: none !important;
+}
+
+// Duel lobby header
+.duelLobbyHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 2rem 0;
+
+  .duelLobbyTitle {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--main-color);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  .duelLobbyRoomId {
+    font-size: 0.85rem;
+    color: var(--sub-color);
+    margin-bottom: 2rem;
+
+    span {
+      color: var(--text-color);
+      font-family: monospace;
+      letter-spacing: 0.1em;
+    }
+  }
+
+  .duelLobbyParticipants {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .duelParticipant {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    border: 2px solid var(--sub-alt-color);
+    border-radius: 0.75rem;
+    min-width: 180px;
+    transition:
+      border-color 0.3s ease,
+      opacity 0.3s ease;
+
+    &.me {
+      border-color: var(--main-color);
+    }
+
+    &.opponent {
+      border-color: var(--text-color);
+    }
+
+    &.waiting {
+      opacity: 0.4;
+      border-style: dashed;
+
+      .duelParticipantIcon {
+        color: var(--sub-color);
+      }
+    }
+
+    .duelParticipantIcon {
+      font-size: 2rem;
+      margin-bottom: 0.75rem;
+      color: var(--main-color);
+    }
+
+    .duelParticipantName {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: var(--text-color);
+      margin-bottom: 0.25rem;
+    }
+
+    .duelParticipantTag {
+      font-size: 0.75rem;
+      color: var(--sub-color);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+  }
+
+  .duelLobbyStatus {
+    font-size: 1rem;
+    color: var(--sub-color);
+    text-align: center;
+  }
+}
+
+// Duel banner shown during competition
+#duelBanner {
+  display: none;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--sub-color);
+  border-bottom: 1px solid var(--sub-alt-color);
+  margin-bottom: 1rem;
+
+  &.active {
+    display: block;
+  }
+
+  .duelBannerSide {
+    font-weight: bold;
+    color: var(--main-color);
+  }
+}
+
+// Duel skip/auto-advance button on results page
+#duelAutoAdvance {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1.5rem;
+
+  &.active {
+    display: flex;
+  }
+
+  .duelAutoAdvanceButton {
+    position: relative;
+    padding: 0.75rem 3rem;
+    border: 2px solid var(--sub-color);
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--text-color);
+    font-size: 1rem;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.3s ease;
+
+    &:hover {
+      border-color: var(--main-color);
+    }
+
+    .duelAutoAdvanceFill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 0%;
+      background: var(--main-color);
+      opacity: 0.15;
+      transition: width 0.1s linear;
+    }
+
+    .duelAutoAdvanceLabel {
+      position: relative;
+      z-index: 1;
+    }
   }
 }

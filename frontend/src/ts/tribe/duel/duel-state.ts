@@ -7,12 +7,13 @@ export type DuelSide = "L" | "R";
 export type DuelFlowState =
   | "SYSTEM_SELECT" // Choosing L or R
   | "OTP" // Entering OTP
-  | "PRACTICE_1" // First practice (30 sec)
-  | "RESULT_1" // Showing result for 5 sec
-  | "COUNTDOWN_1" // 15 sec countdown before practice 2
-  | "PRACTICE_2" // Second practice (60 sec)
-  | "RESULT_2" // Showing result for 5 sec
-  | "COUNTDOWN_2" // 15 sec countdown before lobby
+  | "EULA" // Showing competition rules/terms
+  | "PRACTICE_1" // First practice (60 sec)
+  | "RESULT_1" // Showing result
+  | "COUNTDOWN_1" // Countdown before practice 2
+  | "PRACTICE_2" // Second practice (30 sec)
+  | "RESULT_2" // Showing result
+  | "COUNTDOWN_2" // Countdown before lobby
   | "LOBBY" // Waiting in lobby
   | "RACING" // Active duel
   | "RESULTS"; // Viewing final results
@@ -98,6 +99,15 @@ export function incrementPractice(): number {
   practiceCount += 1;
   console.log(`[DuelState] Practice count: ${practiceCount}`);
   return practiceCount;
+}
+
+/**
+ * Clear persisted side from localStorage only (keep in-memory value).
+ * Used when entering LOBBY — refresh should go back to SYSTEM_SELECT.
+ */
+export function clearPersistedSide(): void {
+  localStorage.removeItem(STORAGE_KEY_SIDE);
+  console.log(`[DuelState] Cleared persisted side from localStorage`);
 }
 
 // --- Reset Functions ---
@@ -202,6 +212,7 @@ export function isInDuelFlow(): boolean {
   return (
     flowState !== "SYSTEM_SELECT" &&
     flowState !== "OTP" &&
+    flowState !== "EULA" &&
     flowState !== "RESULTS"
   );
 }

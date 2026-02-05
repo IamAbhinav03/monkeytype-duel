@@ -36,6 +36,7 @@ import { authPromise } from "../firebase";
 import * as Result from "../test/result";
 import { SimpleModal } from "../utils/simple-modal";
 import * as DuelFlow from "./duel/duel-flow";
+import * as DuelState from "./duel/duel-state";
 
 const defaultName = "Guest";
 let name = "Guest";
@@ -644,11 +645,18 @@ TribeSocket.in.room.initRace((data) => {
 });
 
 TribeSocket.in.room.stateChanged((data) => {
-  // In duel mode during racing, duel-flow.ts manages state transitions.
-  // Skip standard room state changes to prevent conflicting navigation.
-  if (isDuelModeEnabled() && DuelFlow.isRacing()) {
+  // In duel mode, duel-flow.ts manages all state transitions after the race starts.
+  // Skip standard room state changes to prevent conflicting navigation/UI.
+  if (isDuelModeEnabled() && DuelFlow.isInDuelFlow()) {
     console.log(
-      `[Tribe] Skipping room_state_changed (${data.state}) — duel flow is racing`,
+      `[Tribe] Skipping room_state_changed (${data.state}) — duel flow active`,
+    );
+    return;
+  }
+  // Also skip during RESULTS — server still sends state changes after race ends
+  if (isDuelModeEnabled() && DuelState.getFlowState() === "RESULTS") {
+    console.log(
+      `[Tribe] Skipping room_state_changed (${data.state}) — duel results active`,
     );
     return;
   }

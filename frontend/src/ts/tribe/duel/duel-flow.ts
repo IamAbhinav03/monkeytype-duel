@@ -13,17 +13,19 @@ import * as TimerEvent from "../../observables/timer-event";
 import * as UpdateConfig from "../../config";
 import * as Random from "../../utils/random";
 import TribeSocket from "../tribe-socket";
+import * as TribeSound from "../tribe-sound";
+import * as TribeCarets from "../tribe-carets";
 import type { DuelSide } from "./duel-state";
 
 // Production durations (overridable by server for race via duel_race_scheduled)
-const PRACTICE_1_DURATION_SECONDS = 30;
-const PRACTICE_2_DURATION_SECONDS = 60;
+const PRACTICE_1_DURATION_SECONDS = 60; // Test 1: 1 minute
+const PRACTICE_2_DURATION_SECONDS = 30; // Test 2: 30 seconds
 let raceDurationSeconds = 30; // Updated from server's duel_race_scheduled event
 
 // Constants
 const PRACTICE_COUNT_REQUIRED = 2;
-const COUNTDOWN_BETWEEN_TESTS_SECONDS = 10;
-const COUNTDOWN_TO_LOBBY_SECONDS = 10;
+const COUNTDOWN_BETWEEN_TESTS_SECONDS = 5;
+const COUNTDOWN_TO_LOBBY_SECONDS = 5;
 
 // Callbacks for external integration
 let onConnectedCallback: (() => void | Promise<void>) | undefined;
@@ -197,7 +199,7 @@ async function handleAuthenticate(otp: string): Promise<boolean> {
       const result = await doAuthenticate(otp);
       TribePageOtp.setLoading(false);
       if (result) {
-        await startPracticeFlow();
+        await showEulaPage();
       }
     };
 
@@ -208,7 +210,7 @@ async function handleAuthenticate(otp: string): Promise<boolean> {
   // Already connected, just authenticate
   const result = await doAuthenticate(otp);
   if (result) {
-    await startPracticeFlow();
+    await showEulaPage();
   }
   return result;
 }
@@ -280,6 +282,65 @@ async function onSocketConnected(): Promise<void> {
   TribePageOtp.focusInput();
 }
 
+// --- EULA Page ---
+
+const EULA_DURATION_SECONDS = 5;
+
+/**
+ * Show EULA/terms page for 10 seconds, then auto-advance to practice flow.
+ */
+async function showEulaPage(): Promise<void> {
+  console.log("[DuelFlow] Showing EULA page");
+  DuelState.setFlowState("EULA");
+
+  // Navigate to tribe page to show the EULA tribePage
+  NavigationEvent.dispatch("/tribe", { tribeOverride: true });
+
+  // Wait for page transition, then switch to EULA tribePage
+  setTimeout(() => {
+    void TribePages.change("eula");
+  }, 100);
+
+  // Start countdown on EULA page
+  let remaining = EULA_DURATION_SECONDS;
+
+  const eulaInterval = setInterval(() => {
+    remaining--;
+    const timerEl = document.querySelector(".eulaCountdownTimer");
+    if (timerEl) {
+      timerEl.textContent = `${remaining}`;
+    }
+
+    if (remaining <= 0) {
+      clearInterval(eulaInterval);
+      void startPracticeFlow();
+    }
+  }, 1000);
+}
+
+// --- Duel Banner ---
+
+function showDuelBanner(text: string): void {
+  let banner = document.getElementById("duelBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "duelBanner";
+    const testArea = document.querySelector("#typingTest");
+    if (testArea) {
+      testArea.insertBefore(banner, testArea.firstChild);
+    }
+  }
+  banner.innerHTML = text;
+  banner.classList.add("active");
+}
+
+function hideDuelBanner(): void {
+  const banner = document.getElementById("duelBanner");
+  if (banner) {
+    banner.classList.remove("active");
+  }
+}
+
 /**
  * Start the practice flow (2 practice runs).
  */
@@ -301,9 +362,17 @@ async function startPracticeFlow(): Promise<void> {
   UpdateConfig.setConfig("numbers", false, { nosave: true });
   UpdateConfig.setConfig("punctuation", false, { nosave: true });
 
+  // Show banner on test page after navigation
+  const bannerName = DuelState.getUsername() ?? DuelState.getSide() ?? "?";
+  setTimeout(() => {
+    showDuelBanner(
+      `<span class="duelBannerSide">${bannerName}</span> &mdash; Warm-Up ${practiceNum} of ${PRACTICE_COUNT_REQUIRED} &mdash; ${duration}s`,
+    );
+  }, 300);
+
   // Show practice notification
   Notifications.add(
-    `Practice ${practiceNum}/${PRACTICE_COUNT_REQUIRED} (${duration}s)`,
+    `Warm-Up ${practiceNum}/${PRACTICE_COUNT_REQUIRED} (${duration}s)`,
     1,
     {
       customTitle: "Duel",
@@ -334,6 +403,9 @@ export async function onPracticeComplete(): Promise<void> {
   }
 
   const isPractice1 = currentState === "PRACTICE_1";
+
+  // Hide banner on result page
+  hideDuelBanner();
 
   // Increment practice count
   const count = DuelState.incrementPractice();
@@ -466,50 +538,137 @@ async function joinDuelLobby(): Promise<void> {
   console.log("[DuelFlow] Joining duel lobby");
 
   DuelState.setFlowState("LOBBY");
+  // Clear persisted side so refresh from lobby goes to SYSTEM_SELECT
+  DuelState.clearPersistedSide();
 
-  // Notify server we're ready for lobby (fire and forget)
-  TribeSocket.out.duel
-    .joinLobby()
-    .then((response) => {
-      if (!response.ok) {
-        console.warn("[DuelFlow] Join lobby response:", response.error);
-      }
-    })
-    .catch((err: unknown) => {
-      console.warn("[DuelFlow] Failed to notify server of join lobby:", err);
-    });
-
-  // Show waiting notification
-  Notifications.add("Practice complete! Joining lobby...", 1, {
-    customTitle: "Duel",
-    duration: 3,
-  });
+  // Join lobby on server — wait for response so room is set up before navigating
+  try {
+    const response = await TribeSocket.out.duel.joinLobby();
+    if (!response.ok) {
+      console.warn("[DuelFlow] Join lobby response:", response.error);
+    }
+  } catch (err: unknown) {
+    console.warn("[DuelFlow] Failed to notify server of join lobby:", err);
+  }
 
   // Navigate back to tribe page with lobby view
   NavigationEvent.dispatch("/tribe", {
     tribeOverride: true,
   });
+
+  // Set up the duel lobby UI after navigation
+  setTimeout(() => {
+    setupDuelLobby();
+  }, 300);
 }
+
+/**
+ * Set up the duel lobby header with room ID, participants, and status.
+ */
+function setupDuelLobby(): void {
+  const lobby = document.querySelector(".pageTribe .tribePage.lobby");
+  if (!lobby) return;
+
+  // Remove existing duel header if any
+  const existing = lobby.querySelector(".duelLobbyHeader");
+  if (existing) existing.remove();
+
+  // Get room info
+  const TribeState = getTribeStateSync();
+  const room = TribeState?.getRoom();
+  const roomId = room?.id ?? "---";
+  const users = room?.users ?? {};
+  const userCount = Object.keys(users).length;
+
+  const header = document.createElement("div");
+  header.className = "duelLobbyHeader";
+
+  // Build participant cards
+  let participantsHTML = "";
+  for (const user of Object.values(users)) {
+    const isMe = user.id === TribeSocket.getId();
+    participantsHTML += `
+      <div class="duelParticipant ${isMe ? "me" : "opponent"}">
+        <div class="duelParticipantIcon">
+          <i class="fas fa-${isMe ? "user" : "user-friends"}"></i>
+        </div>
+        <div class="duelParticipantName">${user.name}</div>
+        <div class="duelParticipantTag">${isMe ? "You" : "Opponent"}</div>
+      </div>
+    `;
+  }
+
+  // Add empty slot if waiting for opponent
+  if (userCount < 2) {
+    participantsHTML += `
+      <div class="duelParticipant waiting">
+        <div class="duelParticipantIcon">
+          <i class="fas fa-circle-notch fa-spin"></i>
+        </div>
+        <div class="duelParticipantName">Waiting...</div>
+        <div class="duelParticipantTag">Opponent</div>
+      </div>
+    `;
+  }
+
+  const statusText =
+    userCount >= 2
+      ? "Both players ready — race starting soon!"
+      : "Waiting for opponent to finish practice...";
+
+  header.innerHTML = `
+    <div class="duelLobbyTitle">Duel Lobby</div>
+    <div class="duelLobbyRoomId">Room: <span>${roomId}</span></div>
+    <div class="duelLobbyParticipants">${participantsHTML}</div>
+    <div class="duelLobbyStatus">${statusText}</div>
+  `;
+
+  lobby.prepend(header);
+}
+
+/**
+ * Get TribeState synchronously (already imported in module scope).
+ */
+let _tribeStateCache: typeof import("../tribe-state") | undefined;
+
+function getTribeStateSync(): typeof import("../tribe-state") | undefined {
+  if (_tribeStateCache) return _tribeStateCache;
+  // Lazy load — first call returns undefined, subsequent calls return cached
+  void import("../tribe-state").then((mod) => {
+    _tribeStateCache = mod;
+  });
+  return undefined;
+}
+
+// Pre-load TribeState at module init
+void import("../tribe-state").then((mod) => {
+  _tribeStateCache = mod;
+});
 
 /**
  * Handle opponent joined event.
  */
-export function onOpponentJoined(username: string, side: DuelSide): void {
-  console.log(`[DuelFlow] Opponent joined: ${username} (${side})`);
+export function onOpponentJoined(username: string, _side: DuelSide): void {
+  console.log(`[DuelFlow] Opponent joined: ${username}`);
 
-  Notifications.add(`${username} joined as System ${side}`, 1, {
+  Notifications.add(`${username} joined`, 1, {
     customTitle: "Duel",
     duration: 2,
   });
+
+  // Refresh the lobby UI to show the new participant
+  if (DuelState.getFlowState() === "LOBBY") {
+    setupDuelLobby();
+  }
 }
 
 /**
  * Handle opponent left event.
  */
-export function onOpponentLeft(side: DuelSide): void {
-  console.log(`[DuelFlow] Opponent left: ${side}`);
+export function onOpponentLeft(_side: DuelSide): void {
+  console.log("[DuelFlow] Opponent left");
 
-  Notifications.add(`System ${side} disconnected`, -1, {
+  Notifications.add("Opponent disconnected", -1, {
     customTitle: "Duel",
     duration: 3,
   });
@@ -518,10 +677,11 @@ export function onOpponentLeft(side: DuelSide): void {
   const state = DuelState.getFlowState();
   if (state === "LOBBY" || state === "RACING") {
     DuelState.setFlowState("LOBBY");
-    Notifications.add("Waiting for opponent...", 1, {
-      customTitle: "Duel",
-      duration: 3,
-    });
+
+    // Refresh the lobby UI
+    if (state === "LOBBY") {
+      setupDuelLobby();
+    }
   }
 }
 
@@ -552,18 +712,24 @@ export function onRaceScheduled(
 
   // Mark self as typing and set room state to RACE_ONGOING
   // This is required for input to work (keydown handler checks isRaceActive)
+  // Set room to RACE_COUNTDOWN during the waiting/countdown phase.
+  // Typing is NOT enabled yet — that happens in startDuelRace() after countdown reaches 0.
   void import("../tribe-state").then((TribeState) => {
     const room = TribeState.getRoom();
     if (room) {
-      room.state = "RACE_ONGOING";
-      console.log("[DuelFlow] Set room.state = RACE_ONGOING");
+      room.state = "RACE_COUNTDOWN";
+      console.log(
+        "[DuelFlow] Set room.state = RACE_COUNTDOWN (typing blocked)",
+      );
     }
 
     const self = TribeState.getSelf();
     if (self) {
-      self.isTyping = true;
+      self.isTyping = false;
       self.isFinished = false;
-      console.log("[DuelFlow] Set self.isTyping = true");
+      console.log(
+        "[DuelFlow] Set self.isTyping = false (waiting for countdown)",
+      );
     } else {
       console.warn("[DuelFlow] Could not find self in TribeState");
     }
@@ -606,8 +772,37 @@ function navigateToTestAndStartCountdown(startAt: number): void {
     force: true,
   });
 
+  // Show race banner
+  const bannerName = DuelState.getUsername() ?? DuelState.getSide() ?? "?";
+  setTimeout(() => {
+    showDuelBanner(
+      `<span class="duelBannerSide">${bannerName}</span> &mdash; DUEL RACE &mdash; ${raceDurationSeconds}s`,
+    );
+  }, 300);
+
   // Wait for page to load, then verify #words element exists before starting countdown
   waitForWordsAndStartCountdown(startAt, 0);
+}
+
+/**
+ * Initialize opponent carets for the duel race.
+ * Must be called after words are rendered so TribeCarets can position them.
+ */
+function initDuelCarets(): void {
+  // Set all room users to isTyping so TribeCarets.init() creates carets for them
+  const TribeState = getTribeStateSync();
+  const room = TribeState?.getRoom();
+  if (room) {
+    for (const user of Object.values(room.users)) {
+      user.isTyping = true;
+      user.isFinished = false;
+    }
+  }
+
+  // Clean up any leftover carets and create fresh ones
+  TribeCarets.destroyAll();
+  TribeCarets.init();
+  console.log("[DuelFlow] Initialized opponent carets");
 }
 
 /**
@@ -626,6 +821,7 @@ function waitForWordsAndStartCountdown(startAt: number, attempt: number): void {
           "[DuelFlow] #words element not found after retries, starting countdown anyway",
         );
       }
+      initDuelCarets();
       startRaceCountdown(startAt);
     } else {
       waitForWordsAndStartCountdown(startAt, attempt + 1);
@@ -658,6 +854,13 @@ function startRaceCountdown(startAt: number): void {
       console.log(`[DuelFlow] Countdown starting: ${remaining}s until race`);
       TribeCountdown.update2(remaining.toString());
 
+      // Play initial countdown tick
+      if (remaining <= 5) {
+        TribeSound.play("cd");
+      }
+
+      let lastPlayedSecond = remaining;
+
       // Update countdown every 100ms for smooth display
       const countdownInterval = setInterval(() => {
         const currentTime = DuelTimeSync.getServerNow();
@@ -666,10 +869,16 @@ function startRaceCountdown(startAt: number): void {
         if (remaining <= 0) {
           clearInterval(countdownInterval);
           TribeCountdown.hide2();
+          TribeSound.play("cd_go");
           console.log("[DuelFlow] Starting race now!");
           startDuelRace();
         } else {
           TribeCountdown.update2(remaining.toString());
+          // Play tick sound on each new second (only for last 5 seconds)
+          if (remaining !== lastPlayedSecond && remaining <= 5) {
+            lastPlayedSecond = remaining;
+            TribeSound.play("cd");
+          }
         }
       }, 100);
     })
@@ -682,10 +891,17 @@ function startRaceCountdown(startAt: number): void {
 
 /**
  * Actually start the duel race - focus input and dispatch start event.
+ * This is called AFTER the countdown reaches 0.
  */
 function startDuelRace(): void {
-  // Set user as typing in TribeState so input isn't blocked
+  // NOW enable typing — set room state to RACE_ONGOING and isTyping = true
   void import("../tribe-state").then((TribeState) => {
+    const room = TribeState.getRoom();
+    if (room) {
+      room.state = "RACE_ONGOING";
+      console.log("[DuelFlow] Set room.state = RACE_ONGOING (typing enabled)");
+    }
+
     const self = TribeState.getSelf();
     if (self) {
       self.isTyping = true;
@@ -702,6 +918,10 @@ function startDuelRace(): void {
   TimerEvent.dispatch("start");
 }
 
+// Auto-advance timer
+const AUTO_ADVANCE_SECONDS = 5;
+let autoAdvanceInterval: ReturnType<typeof setInterval> | undefined;
+
 /**
  * Handle duel race completed.
  */
@@ -709,8 +929,124 @@ export function onDuelRaceComplete(): void {
   console.log("[DuelFlow] Duel race completed");
 
   DuelState.setFlowState("RESULTS");
+  hideDuelBanner();
+  TribeCarets.destroyAll();
 
-  // Results will be shown through normal tribe result flow
+  // Show auto-advance button below results after a short delay
+  setTimeout(() => {
+    showAutoAdvanceButton();
+  }, 500);
+}
+
+/**
+ * Show the auto-advance (skip) button on the results page.
+ * Fills up over AUTO_ADVANCE_SECONDS, then auto-advances back to lobby/tribe.
+ */
+function showAutoAdvanceButton(): void {
+  // Clean up any existing auto-advance
+  hideAutoAdvanceButton();
+
+  let container = document.getElementById("duelAutoAdvance");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "duelAutoAdvance";
+    container.innerHTML = `
+      <button class="duelAutoAdvanceButton">
+        <div class="duelAutoAdvanceFill"></div>
+        <span class="duelAutoAdvanceLabel">Continue (${AUTO_ADVANCE_SECONDS}s)</span>
+      </button>
+    `;
+  }
+
+  // Insert after result buttons
+  const resultBottom = document.querySelector("#result .buttons");
+  if (resultBottom) {
+    resultBottom.insertAdjacentElement("afterend", container);
+  } else {
+    const resultPage = document.querySelector("#result");
+    if (resultPage) {
+      resultPage.appendChild(container);
+    }
+  }
+
+  container.classList.add("active");
+
+  // These elements are guaranteed to exist since we just created them above
+  const fillEl = container.querySelector(".duelAutoAdvanceFill") as HTMLElement;
+  const labelEl = container.querySelector(
+    ".duelAutoAdvanceLabel",
+  ) as HTMLElement;
+  const buttonEl = container.querySelector(
+    ".duelAutoAdvanceButton",
+  ) as HTMLElement;
+
+  let elapsed = 0;
+  const tickMs = 100;
+  const totalMs = AUTO_ADVANCE_SECONDS * 1000;
+
+  autoAdvanceInterval = setInterval(() => {
+    elapsed += tickMs;
+    const pct = Math.min((elapsed / totalMs) * 100, 100);
+    fillEl.style.width = `${pct}%`;
+
+    const remaining = Math.ceil((totalMs - elapsed) / 1000);
+    labelEl.textContent = `Continue (${remaining}s)`;
+
+    if (elapsed >= totalMs) {
+      clearInterval(autoAdvanceInterval);
+      autoAdvanceInterval = undefined;
+      onAutoAdvance();
+    }
+  }, tickMs);
+
+  // Allow manual skip on click
+  buttonEl.addEventListener("click", () => {
+    if (autoAdvanceInterval) {
+      clearInterval(autoAdvanceInterval);
+      autoAdvanceInterval = undefined;
+    }
+    onAutoAdvance();
+  });
+}
+
+/**
+ * Hide and clean up the auto-advance button.
+ */
+function hideAutoAdvanceButton(): void {
+  if (autoAdvanceInterval) {
+    clearInterval(autoAdvanceInterval);
+    autoAdvanceInterval = undefined;
+  }
+  const container = document.getElementById("duelAutoAdvance");
+  if (container) {
+    container.classList.remove("active");
+    container.remove();
+  }
+}
+
+/**
+ * Called when auto-advance triggers (either timeout or manual click).
+ * Navigate back to tribe lobby.
+ */
+function onAutoAdvance(): void {
+  console.log("[DuelFlow] Auto-advancing from results");
+  hideAutoAdvanceButton();
+  hideCountdownBelowResults();
+
+  // Transition back to LOBBY state so the lobby page shows properly
+  DuelState.setFlowState("LOBBY");
+  // Clear persisted side so refresh from lobby goes to SYSTEM_SELECT
+  DuelState.clearPersistedSide();
+
+  // Navigate back to tribe page
+  NavigationEvent.dispatch("/tribe", {
+    tribeOverride: true,
+  });
+
+  // Set up the duel lobby UI after navigation
+  setTimeout(() => {
+    setupDuelLobby();
+  }, 300);
 }
 
 /**

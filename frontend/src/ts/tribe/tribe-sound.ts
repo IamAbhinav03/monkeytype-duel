@@ -1,5 +1,6 @@
 import { Howl } from "howler";
 import * as TribeState from "../tribe/tribe-state";
+import { isDuelModeEnabled } from "../utils/tribe";
 
 const sounds: Record<string, Howl> = {
   join: new Howl({ src: "/sound/tribe-sounds/join.wav" }),
@@ -21,7 +22,12 @@ export function play(name: string): void {
   ) {
     return;
   }
-  if (!TribeState.getSelf()?.isTyping && ["cd", "cd_go"].includes(name)) {
+  // In duel mode, always allow countdown sounds (typing isn't enabled until countdown finishes)
+  if (
+    !TribeState.getSelf()?.isTyping &&
+    ["cd", "cd_go"].includes(name) &&
+    !isDuelModeEnabled()
+  ) {
     return;
   }
   sounds[name]?.seek(0);
