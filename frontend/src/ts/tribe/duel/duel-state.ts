@@ -101,6 +101,15 @@ export function incrementPractice(): number {
   return practiceCount;
 }
 
+/**
+ * Clear persisted side from localStorage only (keep in-memory value).
+ * Used when entering LOBBY — refresh should go back to SYSTEM_SELECT.
+ */
+export function clearPersistedSide(): void {
+  localStorage.removeItem(STORAGE_KEY_SIDE);
+  console.log(`[DuelState] Cleared persisted side from localStorage`);
+}
+
 // --- Reset Functions ---
 export function clearSide(): void {
   side = undefined;

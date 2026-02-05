@@ -537,6 +537,8 @@ async function joinDuelLobby(): Promise<void> {
   console.log("[DuelFlow] Joining duel lobby");
 
   DuelState.setFlowState("LOBBY");
+  // Clear persisted side so refresh from lobby goes to SYSTEM_SELECT
+  DuelState.clearPersistedSide();
 
   // Join lobby on server — wait for response so room is set up before navigating
   try {
@@ -1009,6 +1011,8 @@ function onAutoAdvance(): void {
 
   // Transition back to LOBBY state so the lobby page shows properly
   DuelState.setFlowState("LOBBY");
+  // Clear persisted side so refresh from lobby goes to SYSTEM_SELECT
+  DuelState.clearPersistedSide();
 
   // Navigate back to tribe page
   NavigationEvent.dispatch("/tribe", {
