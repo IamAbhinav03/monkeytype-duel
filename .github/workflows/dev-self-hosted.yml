@@ -36,13 +36,13 @@ jobs:
           FIREBASE_APPID=${{ secrets.FIREBASE_APPID }}
           EOF
 
-      - name: Create frontend .env file
+      - name: Create frontend .env.tribedev file
         run: |
-          rm -f frontend/.env
-          echo 'BACKEND_URL=###MONKEYTYPE_BACKENDURL###' >> frontend/.env
-          echo 'RECAPTCHA_SITE_KEY=###RECAPTCHA_SITE_KEY###' >> frontend/.env
-          echo 'FORCE_TRIBE=true' >> frontend/.env
-          echo 'FORCE_DUEL=true' >> frontend/.env
+          rm -f frontend/.env.tribedev
+          echo 'BACKEND_URL=###MONKEYTYPE_BACKENDURL###' >> frontend/.env.tribedev
+          echo 'RECAPTCHA_SITE_KEY=###RECAPTCHA_SITE_KEY###' >> frontend/.env.tribedev
+          echo 'FORCE_TRIBE=true' >> frontend/.env.tribedev
+          echo 'FORCE_DUEL=true' >> frontend/.env.tribedev
 
       - name: Deploy to dev
         run: |
