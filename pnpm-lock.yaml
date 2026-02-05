@@ -738,6 +738,67 @@ importers:
         specifier: 2.1.8
         version: 2.1.8(@types/node@22.10.2)(happy-dom@20.0.10)(sass@1.70.0)(terser@5.44.1)
 
+  user-handler:
+    dependencies:
+      '@monkeytype/schemas':
+        specifier: workspace:*
+        version: link:../packages/schemas
+      chalk:
+        specifier: 4.1.2
+        version: 4.1.2
+      cors:
+        specifier: 2.8.5
+        version: 2.8.5
+      dotenv:
+        specifier: 16.4.5
+        version: 16.4.5
+      express:
+        specifier: 5.0.1
+        version: 5.0.1
+      uuid:
+        specifier: 10.0.0
+        version: 10.0.0
+      winston:
+        specifier: 3.6.0
+        version: 3.6.0
+      zod:
+        specifier: 3.23.8
+        version: 3.23.8
+    devDependencies:
+      '@monkeytype/oxlint-config':
+        specifier: workspace:*
+        version: link:../packages/oxlint-config
+      '@monkeytype/typescript-config':
+        specifier: workspace:*
+        version: link:../packages/typescript-config
+      '@types/cors':
+        specifier: 2.8.12
+        version: 2.8.12
+      '@types/express':
+        specifier: 5.0.0
+        version: 5.0.0
+      '@types/node':
+        specifier: 22.10.2
+        version: 22.10.2
+      '@types/uuid':
+        specifier: 10.0.0
+        version: 10.0.0
+      concurrently:
+        specifier: 8.2.2
+        version: 8.2.2
+      oxlint:
+        specifier: 0.15.3
+        version: 0.15.3
+      tsx:
+        specifier: 4.16.2
+        version: 4.16.2
+      typescript:
+        specifier: 5.7.2
+        version: 5.7.2
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.10.2)(happy-dom@20.0.10)(sass@1.70.0)(terser@5.44.1)
+
 packages:
 
   '@ampproject/remapping@2.3.0':
