@@ -673,6 +673,9 @@ importers:
 
   tribes-server:
     dependencies:
+      '@monkeytype/contracts':
+        specifier: workspace:*
+        version: link:../packages/contracts
       '@monkeytype/schemas':
         specifier: workspace:*
         version: link:../packages/schemas
@@ -688,6 +691,9 @@ importers:
       express:
         specifier: 5.0.1
         version: 5.0.1
+      firebase-admin:
+        specifier: 13.4.0
+        version: 13.4.0(encoding@0.1.13)
       socket.io:
         specifier: 4.7.5
         version: 4.7.5
@@ -1932,6 +1938,9 @@ packages:
     resolution: {integrity: sha512-7PQA7EH43S0CxcOa9OeAnaeA0oQ+e/DHNPZwSQM9CQHW76jle5+OvLdibRp/Aafs9KXbLhxyjOTkRjWUbQEd3Q==}
     engines: {node: '>=14'}
 
+  '@fastify/busboy@3.2.0':
+    resolution: {integrity: sha512-m9FVDXU3GT2ITSe0UaMA5rU3QkfC/UXtCU8y0gSN/GugTqtVldOBWIB5V6V3sbmenVZUIpU6f+mPEO2+m5iTaA==}
+
   '@fastify/error@2.0.0':
     resolution: {integrity: sha512-wI3fpfDT0t7p8E6dA2eTECzzOd+bZsZCJ2Hcv+Onn2b7ZwK3RwD27uW2QDaMtQhAfWQQP+WNK7nKf0twLsBf9w==}
 
@@ -2180,6 +2189,10 @@ packages:
     resolution: {integrity: sha512-Z/6haHca3bnaf1I2t/lmRgU5pCzGQTK6u9hMnD6a6sCL46QB4JRiBvRI5QMSPjnG8VYr1R7Wp1ZawvQJodEY6g==}
     engines: {node: '>=14'}
 
+  '@google-cloud/firestore@7.11.6':
+    resolution: {integrity: sha512-EW/O8ktzwLfyWBOsNuhRoMi8lrC3clHM5LVFhGvO1HCsLozCOOXRAlHrYBoE6HL42Sc8yYMuCb2XqcnJ4OOEpw==}
+    engines: {node: '>=14.0.0'}
+
   '@google-cloud/firestore@7.9.0':
     resolution: {integrity: sha512-c4ALHT3G08rV7Zwv8Z2KG63gZh66iKdhCBeDfCpIkLrjX6EAjTD/szMdj14M+FnQuClZLFfW5bAgoOjfNmLtJg==}
     engines: {node: '>=14.0.0'}
@@ -2206,6 +2219,10 @@ packages:
 
   '@google-cloud/storage@7.12.0':
     resolution: {integrity: sha512-122Ui67bhnf8MkRnxQAC5lf7wPGkPP5hL3+J5s9HHDw2J9RpaMmnV8iahn+RUn9BH70W6uRe6nMZLXiRaJM/3g==}
+    engines: {node: '>=14'}
+
+  '@google-cloud/storage@7.18.0':
+    resolution: {integrity: sha512-r3ZwDMiz4nwW6R922Z1pwpePxyRwE5GdevYX63hRmAQUkUQJcBH/79EnQPDv5cOv1mFBgevdNWQfi3tie3dHrQ==}
     engines: {node: '>=14'}
 
   '@googleapis/sqladmin@19.0.0':
@@ -5269,6 +5286,10 @@ packages:
     resolution: {integrity: sha512-hMQ4CX1p1izmuLYyZqLMO/qGNw10wSv9QDCPfzXfyFrOaCSSoRfqE1Kf1s5an66J5JZC62NewG+mK49jOCtQew==}
     engines: {node: '>=4'}
 
+  farmhash-modern@1.1.0:
+    resolution: {integrity: sha512-6ypT4XfgqJk/F3Yuv4SX26I3doUjt0GTG4a+JgWxXQpxXzTBq8fPUeGHfcYMMDPHJHm3yPOSjaeBwBGAHWXCdA==}
+    engines: {node: '>=18.0.0'}
+
   fast-content-type-parse@1.1.0:
     resolution: {integrity: sha512-fBHHqSTFLVnR61C+gltJuE5GkVQMV0S2nqUO8TJ+5Z3qAKG8vAx4FKai1s5jq/inV1+sREynIWSuQ6HgoSXpDQ==}
 
@@ -5408,6 +5429,10 @@ packages:
   firebase-admin@12.0.0:
     resolution: {integrity: sha512-wBrrSSsKV++/+O8E7O/C7/wL0nbG/x4Xv4yatz/+sohaZ+LsnWtYUcrd3gZutO86hLpDex7xgyrkKbgulmtVyQ==}
     engines: {node: '>=14'}
+
+  firebase-admin@13.4.0:
+    resolution: {integrity: sha512-Y8DcyKK+4pl4B93ooiy1G8qvdyRMkcNFfBSh+8rbVcw4cW8dgG0VXCCTp5NUwub8sn9vSPsOwpb9tE2OuFmcfQ==}
+    engines: {node: '>=18'}
 
   firebase-tools@13.15.1:
     resolution: {integrity: sha512-HD92RbtG3uVeC8KgiIC6ZlQjr5ep6g4Utcv23QOr2sBfwZ1UDQW9Kg89HKPYgEC2Y7h7ANIF+TZqDOvDIA1n5A==}
@@ -5700,6 +5725,10 @@ packages:
 
   google-auth-library@9.12.0:
     resolution: {integrity: sha512-5pWjpxJMNJ5UTuhK7QPD5KFPsbosWkX4ajMDeZwXllTtwwqeiIzPWbHIddkLBkkn0mUPboTmukT5rd30Ec9igQ==}
+    engines: {node: '>=14'}
+
+  google-auth-library@9.15.1:
+    resolution: {integrity: sha512-Jb6Z0+nvECVz+2lzSMt9u98UsoakXxA2HGHMCxh+so3n90XgYWkq5dur19JAJV7ONiJY22yBTyJB1TSkvPq9Ng==}
     engines: {node: '>=14'}
 
   google-gax@4.3.8:
@@ -9333,6 +9362,10 @@ packages:
     resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
     hasBin: true
 
+  uuid@11.1.0:
+    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
+    hasBin: true
+
   uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
     hasBin: true
@@ -11105,6 +11138,8 @@ snapshots:
     dependencies:
       text-decoding: 1.0.0
 
+  '@fastify/busboy@3.2.0': {}
+
   '@fastify/error@2.0.0': {}
 
   '@firebase/ai@2.0.0(@firebase/app-types@0.9.3)(@firebase/app@0.14.0)':
@@ -11480,6 +11515,18 @@ snapshots:
       - encoding
       - supports-color
 
+  '@google-cloud/firestore@7.11.6(encoding@0.1.13)':
+    dependencies:
+      '@opentelemetry/api': 1.8.0
+      fast-deep-equal: 3.1.3
+      functional-red-black-tree: 1.0.1
+      google-gax: 4.3.8(encoding@0.1.13)
+      protobufjs: 7.3.2
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+    optional: true
+
   '@google-cloud/firestore@7.9.0(encoding@0.1.13)':
     dependencies:
       fast-deep-equal: 3.1.3
@@ -11533,6 +11580,28 @@ snapshots:
       fast-xml-parser: 4.4.1
       gaxios: 6.7.0(encoding@0.1.13)
       google-auth-library: 9.12.0(encoding@0.1.13)
+      html-entities: 2.5.2
+      mime: 3.0.0
+      p-limit: 3.1.0
+      retry-request: 7.0.2(encoding@0.1.13)
+      teeny-request: 9.0.0(encoding@0.1.13)
+      uuid: 8.3.2
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+    optional: true
+
+  '@google-cloud/storage@7.18.0(encoding@0.1.13)':
+    dependencies:
+      '@google-cloud/paginator': 5.0.2
+      '@google-cloud/projectify': 4.0.0
+      '@google-cloud/promisify': 4.0.0
+      abort-controller: 3.0.0
+      async-retry: 1.3.3
+      duplexify: 4.1.3
+      fast-xml-parser: 4.5.3
+      gaxios: 6.7.0(encoding@0.1.13)
+      google-auth-library: 9.15.1(encoding@0.1.13)
       html-entities: 2.5.2
       mime: 3.0.0
       p-limit: 3.1.0
@@ -15059,6 +15128,8 @@ snapshots:
       iconv-lite: 0.4.24
       tmp: 0.0.33
 
+  farmhash-modern@1.1.0: {}
+
   fast-content-type-parse@1.1.0: {}
 
   fast-content-type-parse@2.0.1: {}
@@ -15247,6 +15318,25 @@ snapshots:
     optionalDependencies:
       '@google-cloud/firestore': 7.9.0(encoding@0.1.13)
       '@google-cloud/storage': 7.12.0(encoding@0.1.13)
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+
+  firebase-admin@13.4.0(encoding@0.1.13):
+    dependencies:
+      '@fastify/busboy': 3.2.0
+      '@firebase/database-compat': 2.1.0
+      '@firebase/database-types': 1.0.16
+      '@types/node': 22.10.2
+      farmhash-modern: 1.1.0
+      google-auth-library: 9.15.1(encoding@0.1.13)
+      jsonwebtoken: 9.0.2
+      jwks-rsa: 3.1.0
+      node-forge: 1.3.1
+      uuid: 11.1.0
+    optionalDependencies:
+      '@google-cloud/firestore': 7.11.6(encoding@0.1.13)
+      '@google-cloud/storage': 7.18.0(encoding@0.1.13)
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -15698,6 +15788,18 @@ snapshots:
       minimist: 1.2.8
 
   google-auth-library@9.12.0(encoding@0.1.13):
+    dependencies:
+      base64-js: 1.5.1
+      ecdsa-sig-formatter: 1.0.11
+      gaxios: 6.7.0(encoding@0.1.13)
+      gcp-metadata: 6.1.0(encoding@0.1.13)
+      gtoken: 7.1.0(encoding@0.1.13)
+      jws: 4.0.0
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+
+  google-auth-library@9.15.1(encoding@0.1.13):
     dependencies:
       base64-js: 1.5.1
       ecdsa-sig-formatter: 1.0.11
@@ -19888,6 +19990,8 @@ snapshots:
   utils-merge@1.0.1: {}
 
   uuid@10.0.0: {}
+
+  uuid@11.1.0: {}
 
   uuid@8.3.2: {}
 

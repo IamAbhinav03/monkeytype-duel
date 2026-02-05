@@ -1,29 +1,15 @@
-import type { Server, Socket } from "socket.io";
 import { roomStore } from "../stores/room-store.js";
 import * as raceService from "./race-service.js";
-import type { Room, UserProgressOut, Result } from "../types/room.js";
-import type { RoomConfig } from "../types/config.js";
 import type {
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  SocketData,
-} from "../types/events.js";
+  Room,
+  UserProgressOut,
+  TribeResult,
+  RoomConfig,
+  PublicRoomData,
+} from "@monkeytype/schemas/tribes";
+import type { TribesServer, TribesSocket } from "../middleware/index.js";
+import { sanitizeMessage } from "@monkeytype/contracts/socket-contract";
 import Logger from "../utils/logger.js";
-
-type TribesServer = Server<
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  SocketData
->;
-
-type TribesSocket = Socket<
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  SocketData
->;
 
 export function createRoom(
   io: TribesServer,
@@ -108,9 +94,9 @@ export function handleDisconnect(io: TribesServer, socket: TribesSocket): void {
 export function getPublicRooms(
   page: number,
   search: string,
-): { rooms: Room[] } {
+): { rooms: PublicRoomData[] } {
   const rooms = roomStore.getPublicRooms(page, search);
-  return { rooms: rooms as unknown as Room[] };
+  return { rooms };
 }
 
 export function toggleReady(io: TribesServer, socket: TribesSocket): void {
@@ -167,11 +153,8 @@ export function sendChatMessage(
   const user = room.users[socket.id];
   if (!user) return;
 
-  // Sanitize message
-  const sanitized = message
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .substring(0, 200);
+  // Use shared sanitization function
+  const sanitized = sanitizeMessage(message, 200);
 
   io.to(room.id).emit("room_chat_message", {
     message: sanitized,
@@ -227,7 +210,7 @@ export function updateRoomName(
 
   if (!roomStore.isLeader(socket.id)) return;
 
-  const sanitized = name.substring(0, 50);
+  const sanitized = sanitizeMessage(name, 50);
   roomStore.updateRoomName(room.id, sanitized);
   io.to(room.id).emit("room_name_changed", { name: sanitized });
 }
@@ -284,7 +267,7 @@ export function updateProgress(
 export function submitResult(
   io: TribesServer,
   socket: TribesSocket,
-  result: Result,
+  result: TribeResult,
 ): void {
   raceService.submitResult(io, socket.id, result);
 }

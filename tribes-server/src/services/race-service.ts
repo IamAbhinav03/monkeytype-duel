@@ -1,4 +1,3 @@
-import type { Server } from "socket.io";
 import { roomStore } from "../stores/room-store.js";
 import { timerService, TimerType } from "./timer-service.js";
 import {
@@ -10,23 +9,11 @@ import type {
   RoomState,
   UserProgress,
   UserProgressOut,
-  Result,
-} from "../types/room.js";
-import type {
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  SocketData,
-} from "../types/events.js";
+  TribeResult,
+} from "@monkeytype/schemas/tribes";
+import type { TribesServer } from "../middleware/index.js";
 import { generateSeed } from "../utils/id-generator.js";
 import Logger from "../utils/logger.js";
-
-type TribesServer = Server<
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  SocketData
->;
 
 const COUNTDOWN_DURATION = 5000;
 const COUNTDOWN_INTERVAL = 1000;
@@ -106,8 +93,8 @@ function handleRaceInit(io: TribesServer, room: Room): void {
   room.seed = generateSeed();
   room.maxRaw = 0;
   room.maxWpm = 0;
-  room.minRaw = Infinity;
-  room.minWpm = Infinity;
+  room.minRaw = 0;
+  room.minWpm = 0;
 
   // Reset user states
   Object.values(room.users).forEach((user) => {
@@ -129,7 +116,7 @@ function handleRaceInit(io: TribesServer, room: Room): void {
 }
 
 function handleRaceCountdown(io: TribesServer, room: Room): void {
-  let remaining = COUNTDOWN_DURATION / 1000;
+  const remaining = COUNTDOWN_DURATION / 1000;
 
   timerService.start(room.id, TimerType.COUNTDOWN, {
     duration: COUNTDOWN_DURATION,
@@ -276,8 +263,16 @@ export function updateProgress(
   const room = roomStore.getRoomBySocketId(socketId);
   if (!room) return;
 
+  // Verify room is in a valid state for progress updates
+  if (room.state !== "RACE_ONGOING" && room.state !== "RACE_ONE_FINISHED") {
+    return;
+  }
+
   const user = room.users[socketId];
   if (!user) return;
+
+  // Don't update if user already finished
+  if (user.isFinished) return;
 
   user.progress = {
     ...progress,
@@ -290,13 +285,31 @@ export function updateProgress(
 export function submitResult(
   io: TribesServer,
   socketId: string,
-  result: Result,
+  result: TribeResult,
 ): void {
   const room = roomStore.getRoomBySocketId(socketId);
   if (!room) return;
 
+  // Verify room is in a valid state for results
+  if (
+    room.state !== "RACE_ONGOING" &&
+    room.state !== "RACE_ONE_FINISHED" &&
+    room.state !== "RACE_AWAITING_RESULTS"
+  ) {
+    Logger.warning(
+      `Result submitted in invalid state: ${room.state} for socket ${socketId}`,
+    );
+    return;
+  }
+
   const user = room.users[socketId];
   if (!user) return;
+
+  // Don't allow duplicate results
+  if (user.isFinished) {
+    Logger.warning(`Duplicate result from socket ${socketId}`);
+    return;
+  }
 
   user.result = result;
   user.isFinished = true;

@@ -1,28 +1,27 @@
-export enum MatchmakingQueue {
-  TIME_15 = 0,
-  TIME_60 = 1,
-  MEDIUM_QUOTES = 2,
-  LONG_QUOTES = 3,
-}
+import { MATCHMAKING_QUEUE } from "@monkeytype/schemas/tribes";
+
+export { MATCHMAKING_QUEUE };
+
+export type MatchmakingQueueIndex = 0 | 1 | 2 | 3;
 
 type QueueEntry = {
   socketId: string;
   name: string;
   joinedAt: number;
-  queues: MatchmakingQueue[];
+  queues: MatchmakingQueueIndex[];
 };
 
 class MatchmakingStore {
-  private queues: Map<MatchmakingQueue, Set<string>> = new Map([
-    [MatchmakingQueue.TIME_15, new Set()],
-    [MatchmakingQueue.TIME_60, new Set()],
-    [MatchmakingQueue.MEDIUM_QUOTES, new Set()],
-    [MatchmakingQueue.LONG_QUOTES, new Set()],
+  private queues: Map<MatchmakingQueueIndex, Set<string>> = new Map([
+    [MATCHMAKING_QUEUE.TIME_15, new Set()],
+    [MATCHMAKING_QUEUE.TIME_60, new Set()],
+    [MATCHMAKING_QUEUE.MEDIUM_QUOTES, new Set()],
+    [MATCHMAKING_QUEUE.LONG_QUOTES, new Set()],
   ]);
 
   private entries: Map<string, QueueEntry> = new Map();
 
-  join(socketId: string, name: string, queues: MatchmakingQueue[]): void {
+  join(socketId: string, name: string, queues: MatchmakingQueueIndex[]): void {
     // Remove from any existing queues first
     this.leave(socketId);
 
@@ -54,29 +53,29 @@ class MatchmakingStore {
     return this.entries.get(socketId);
   }
 
-  getPlayersInQueue(queue: MatchmakingQueue): string[] {
+  getPlayersInQueue(queue: MatchmakingQueueIndex): string[] {
     const queueSet = this.queues.get(queue);
     return queueSet ? Array.from(queueSet) : [];
   }
 
   getQueueLengths(): [number, number, number, number] {
     return [
-      this.queues.get(MatchmakingQueue.TIME_15)?.size ?? 0,
-      this.queues.get(MatchmakingQueue.TIME_60)?.size ?? 0,
-      this.queues.get(MatchmakingQueue.MEDIUM_QUOTES)?.size ?? 0,
-      this.queues.get(MatchmakingQueue.LONG_QUOTES)?.size ?? 0,
+      this.queues.get(MATCHMAKING_QUEUE.TIME_15)?.size ?? 0,
+      this.queues.get(MATCHMAKING_QUEUE.TIME_60)?.size ?? 0,
+      this.queues.get(MATCHMAKING_QUEUE.MEDIUM_QUOTES)?.size ?? 0,
+      this.queues.get(MATCHMAKING_QUEUE.LONG_QUOTES)?.size ?? 0,
     ];
   }
 
   findMatch(
     minPlayers = 2,
-  ): { queue: MatchmakingQueue; players: QueueEntry[] } | null {
+  ): { queue: MatchmakingQueueIndex; players: QueueEntry[] } | null {
     for (const queue of [
-      MatchmakingQueue.TIME_15,
-      MatchmakingQueue.TIME_60,
-      MatchmakingQueue.MEDIUM_QUOTES,
-      MatchmakingQueue.LONG_QUOTES,
-    ]) {
+      MATCHMAKING_QUEUE.TIME_15,
+      MATCHMAKING_QUEUE.TIME_60,
+      MATCHMAKING_QUEUE.MEDIUM_QUOTES,
+      MATCHMAKING_QUEUE.LONG_QUOTES,
+    ] as MatchmakingQueueIndex[]) {
       const queueSet = this.queues.get(queue);
       if (queueSet && queueSet.size >= minPlayers) {
         // Get players in this queue, sorted by join time

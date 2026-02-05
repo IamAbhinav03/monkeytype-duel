@@ -1,9 +1,9 @@
 import type {
   Room,
-  Result,
+  TribeResult,
   FinalPositions,
   MiniCrowns,
-} from "../types/room.js";
+} from "@monkeytype/schemas/tribes";
 
 const POSITION_POINTS = [10, 7, 5, 4, 3, 2, 1, 0];
 
@@ -51,7 +51,7 @@ export function calculateFinalPositions(room: Room): FinalPositions {
 export function calculateMiniCrowns(room: Room): MiniCrowns {
   const users = Object.values(room.users).filter((u) => u.result);
 
-  const getWinners = (metric: keyof Result): string[] => {
+  const getWinners = (metric: keyof TribeResult): string[] => {
     if (users.length === 0) return [];
 
     const values = users.map((u) => {

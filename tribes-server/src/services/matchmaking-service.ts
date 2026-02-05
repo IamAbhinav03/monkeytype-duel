@@ -1,24 +1,15 @@
-import type { Server } from "socket.io";
 import {
   matchmakingStore,
-  MatchmakingQueue,
+  MATCHMAKING_QUEUE,
+  type MatchmakingQueueIndex,
 } from "../stores/matchmaking-store.js";
 import { roomStore } from "../stores/room-store.js";
-import { getDefaultRoomConfig, getMatchmakingConfig } from "../types/config.js";
-import type {
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  SocketData,
-} from "../types/events.js";
+import {
+  getDefaultRoomConfig,
+  getMatchmakingConfig,
+} from "@monkeytype/schemas/tribes";
+import type { TribesServer } from "../middleware/index.js";
 import Logger from "../utils/logger.js";
-
-type TribesServer = Server<
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  SocketData
->;
 
 const MIN_PLAYERS_TO_MATCH = 2;
 const MATCHMAKING_CHECK_INTERVAL = 2000;
@@ -95,20 +86,40 @@ function checkForMatches(io: TribesServer): void {
     }
   }
 
+  const queueName =
+    queue === MATCHMAKING_QUEUE.TIME_15
+      ? "TIME_15"
+      : queue === MATCHMAKING_QUEUE.TIME_60
+        ? "TIME_60"
+        : queue === MATCHMAKING_QUEUE.MEDIUM_QUOTES
+          ? "MEDIUM_QUOTES"
+          : "LONG_QUOTES";
+
   Logger.info(
-    `Matchmaking: Created room ${room.id} with ${players.length} players from queue ${MatchmakingQueue[queue]}`,
+    `Matchmaking: Created room ${room.id} with ${players.length} players from queue ${queueName}`,
   );
 }
 
 export function joinQueue(
   socketId: string,
   name: string,
-  queues: MatchmakingQueue[],
+  queues: MatchmakingQueueIndex[],
 ): void {
   matchmakingStore.join(socketId, name, queues);
-  Logger.info(
-    `Player ${name} joined queues: ${queues.map((q) => MatchmakingQueue[q]).join(", ")}`,
-  );
+
+  const queueNames = queues
+    .map((q) =>
+      q === MATCHMAKING_QUEUE.TIME_15
+        ? "TIME_15"
+        : q === MATCHMAKING_QUEUE.TIME_60
+          ? "TIME_60"
+          : q === MATCHMAKING_QUEUE.MEDIUM_QUOTES
+            ? "MEDIUM_QUOTES"
+            : "LONG_QUOTES",
+    )
+    .join(", ");
+
+  Logger.info(`Player ${name} joined queues: ${queueNames}`);
 }
 
 export function leaveQueue(socketId: string): void {

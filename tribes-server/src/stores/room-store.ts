@@ -1,15 +1,28 @@
-import type { Room, User, PublicRoomData, RoomState } from "../types/room.js";
-import type { RoomConfig } from "../types/config.js";
-import { getDefaultRoomConfig } from "../types/config.js";
+import type {
+  Room,
+  TribeUser,
+  PublicRoomData,
+  RoomState,
+  RoomConfig,
+} from "@monkeytype/schemas/tribes";
+import { getDefaultRoomConfig } from "@monkeytype/schemas/tribes";
 import {
   generateRoomId,
   releaseRoomId,
   generateSeed,
 } from "../utils/id-generator.js";
 
+// ============================================================================
+// Room Store
+// ============================================================================
+
 class RoomStore {
   private rooms: Map<string, Room> = new Map();
   private socketToRoom: Map<string, string> = new Map();
+
+  // Room TTL for cleanup (30 minutes of inactivity)
+  private roomLastActivity: Map<string, number> = new Map();
+  private readonly ROOM_TTL_MS = 30 * 60 * 1000;
 
   createRoom(
     leaderId: string,
@@ -39,13 +52,14 @@ class RoomStore {
       config: { ...getDefaultRoomConfig(), ...config },
       maxRaw: 0,
       maxWpm: 0,
-      minRaw: Infinity,
-      minWpm: Infinity,
+      minRaw: 0,
+      minWpm: 0,
       seed: generateSeed(),
     };
 
     this.rooms.set(roomId, room);
     this.socketToRoom.set(leaderId, roomId);
+    this.roomLastActivity.set(roomId, Date.now());
     return room;
   }
 
@@ -66,11 +80,11 @@ class RoomStore {
     roomId: string,
     socketId: string,
     name: string,
-  ): { room: Room; user: User } | undefined {
+  ): { room: Room; user: TribeUser } | undefined {
     const room = this.rooms.get(roomId);
     if (!room) return undefined;
 
-    const user: User = {
+    const user: TribeUser = {
       id: socketId,
       name,
       isLeader: false,
@@ -83,6 +97,7 @@ class RoomStore {
     room.users[socketId] = user;
     room.size = Object.keys(room.users).length;
     this.socketToRoom.set(socketId, roomId);
+    this.touchRoom(roomId);
 
     return { room, user };
   }
@@ -118,6 +133,7 @@ class RoomStore {
       }
     }
 
+    this.touchRoom(roomId);
     return { room, wasLeader };
   }
 
@@ -128,6 +144,7 @@ class RoomStore {
         this.socketToRoom.delete(socketId);
       });
       this.rooms.delete(roomId);
+      this.roomLastActivity.delete(roomId);
       releaseRoomId(roomId);
     }
   }
@@ -136,6 +153,7 @@ class RoomStore {
     const room = this.rooms.get(roomId);
     if (room) {
       room.state = state;
+      this.touchRoom(roomId);
     }
   }
 
@@ -143,6 +161,7 @@ class RoomStore {
     const room = this.rooms.get(roomId);
     if (room) {
       room.config = config;
+      this.touchRoom(roomId);
     }
   }
 
@@ -150,6 +169,7 @@ class RoomStore {
     const room = this.rooms.get(roomId);
     if (room) {
       room.name = name;
+      this.touchRoom(roomId);
     }
   }
 
@@ -157,12 +177,13 @@ class RoomStore {
     const room = this.rooms.get(roomId);
     if (room) {
       room.isPrivate = !room.isPrivate;
+      this.touchRoom(roomId);
       return room.isPrivate;
     }
     return undefined;
   }
 
-  getUser(socketId: string): User | undefined {
+  getUser(socketId: string): TribeUser | undefined {
     const room = this.getRoomBySocketId(socketId);
     return room?.users[socketId];
   }
@@ -190,6 +211,7 @@ class RoomStore {
 
     // Set new leader
     room.users[newLeaderId].isLeader = true;
+    this.touchRoom(roomId);
     return true;
   }
 
@@ -241,8 +263,8 @@ class RoomStore {
     room.seed = generateSeed();
     room.maxRaw = 0;
     room.maxWpm = 0;
-    room.minRaw = Infinity;
-    room.minWpm = Infinity;
+    room.minRaw = 0;
+    room.minWpm = 0;
 
     Object.values(room.users).forEach((user) => {
       user.isReady = false;
@@ -251,6 +273,33 @@ class RoomStore {
       user.result = undefined;
       user.progress = undefined;
     });
+
+    this.touchRoom(roomId);
+  }
+
+  // ============================================================================
+  // TTL Management
+  // ============================================================================
+
+  private touchRoom(roomId: string): void {
+    this.roomLastActivity.set(roomId, Date.now());
+  }
+
+  /**
+   * Clean up rooms that have been inactive for too long
+   */
+  cleanupInactiveRooms(): number {
+    const now = Date.now();
+    let cleaned = 0;
+
+    for (const [roomId, lastActivity] of this.roomLastActivity.entries()) {
+      if (now - lastActivity > this.ROOM_TTL_MS) {
+        this.deleteRoom(roomId);
+        cleaned++;
+      }
+    }
+
+    return cleaned;
   }
 }
 

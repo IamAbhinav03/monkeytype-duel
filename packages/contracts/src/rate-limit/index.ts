@@ -386,6 +386,112 @@ export const limits = {
     window: "hour",
     max: 60,
   },
+
+  // Tribes Socket Rate Limits
+  tribeSystemCheck: {
+    window: "minute",
+    max: 10,
+  },
+
+  tribeStats: {
+    window: "minute",
+    max: 30,
+  },
+
+  tribeRoomCreate: {
+    window: "minute",
+    max: 10,
+  },
+
+  tribeRoomJoin: {
+    window: "minute",
+    max: 30,
+  },
+
+  tribeRoomLeave: {
+    window: "minute",
+    max: 30,
+  },
+
+  tribeRoomList: {
+    window: "minute",
+    max: 30,
+  },
+
+  tribeRaceInit: {
+    window: "minute",
+    max: 20,
+  },
+
+  tribeReadyUpdate: {
+    window: "minute",
+    max: 60,
+  },
+
+  tribeProgressUpdate: {
+    window: "second",
+    max: 20,
+  },
+
+  tribeResult: {
+    window: "minute",
+    max: 30,
+  },
+
+  tribeBackToLobby: {
+    window: "minute",
+    max: 30,
+  },
+
+  tribeChatMessage: {
+    window: "minute",
+    max: 30,
+  },
+
+  tribeChattingUpdate: {
+    window: "second",
+    max: 5,
+  },
+
+  tribeRoomConfig: {
+    window: "minute",
+    max: 30,
+  },
+
+  tribeRoomVisibility: {
+    window: "minute",
+    max: 10,
+  },
+
+  tribeRoomName: {
+    window: "minute",
+    max: 10,
+  },
+
+  tribeBanUser: {
+    window: "minute",
+    max: 10,
+  },
+
+  tribeGiveLeader: {
+    window: "minute",
+    max: 10,
+  },
+
+  tribeAfkUpdate: {
+    window: "minute",
+    max: 30,
+  },
+
+  tribeSetName: {
+    window: "minute",
+    max: 5,
+  },
+
+  tribeDevRoom: {
+    window: "minute",
+    max: 10,
+  },
 } satisfies Record<string, RateLimitOptions>;
 
 export type RateLimiterId = keyof typeof limits;
