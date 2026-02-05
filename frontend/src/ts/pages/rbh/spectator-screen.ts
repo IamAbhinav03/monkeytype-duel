@@ -62,28 +62,77 @@ function getPageElement(): ElementWithUtils | null {
 
 // ============ VIEW SWITCHING ============
 
-export function showLeaderboard(): void {
+const TRANSITION_DURATION = 600; // ms
+let isTransitioning = false;
+
+export async function showLeaderboard(): Promise<void> {
+  if (currentView === "leaderboard" || isTransitioning) return;
+
   const page = getPageElement();
   if (!page) return;
 
   const leaderboardView = page.qs("#leaderboardView");
   const duelView = page.qs("#duelView");
 
-  leaderboardView?.removeClass("hidden");
-  duelView?.addClass("hidden");
+  if (!leaderboardView || !duelView) return;
+
+  isTransitioning = true;
+
+  // Fade out + blur current view
+  duelView.addClass("transitioning-out");
+
+  await new Promise((resolve) => setTimeout(resolve, TRANSITION_DURATION));
+
+  duelView.addClass("hidden");
+  duelView.removeClass("transitioning-out");
+
+  // Show and fade in new view
+  leaderboardView.removeClass("hidden");
+  leaderboardView.addClass("transitioning-in");
+
+  // Force reflow before removing transition class
+  void leaderboardView.native.offsetHeight;
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  leaderboardView.removeClass("transitioning-in");
+
   currentView = "leaderboard";
+  isTransitioning = false;
 }
 
-export function showDuel(): void {
+export async function showDuel(): Promise<void> {
+  if (currentView === "duel" || isTransitioning) return;
+
   const page = getPageElement();
   if (!page) return;
 
   const leaderboardView = page.qs("#leaderboardView");
   const duelView = page.qs("#duelView");
 
-  leaderboardView?.addClass("hidden");
-  duelView?.removeClass("hidden");
+  if (!leaderboardView || !duelView) return;
+
+  isTransitioning = true;
+
+  // Fade out + blur current view
+  leaderboardView.addClass("transitioning-out");
+
+  await new Promise((resolve) => setTimeout(resolve, TRANSITION_DURATION));
+
+  leaderboardView.addClass("hidden");
+  leaderboardView.removeClass("transitioning-out");
+
+  // Show and fade in new view
+  duelView.removeClass("hidden");
+  duelView.addClass("transitioning-in");
+
+  // Force reflow before removing transition class
+  void duelView.native.offsetHeight;
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  duelView.removeClass("transitioning-in");
+
   currentView = "duel";
+  isTransitioning = false;
 }
 
 export function getCurrentView(): ViewType {
@@ -366,7 +415,7 @@ export const page = new Page({
     reset();
   },
   afterShow: async () => {
-    showLeaderboard();
+    void showLeaderboard();
 
     addToGlobal({
       spectatorScreen: {

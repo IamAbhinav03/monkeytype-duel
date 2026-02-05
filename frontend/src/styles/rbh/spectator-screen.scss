@@ -4,10 +4,39 @@
 // ============================================================
 
 .pageRbhSpectatorScreen {
-  // Hide views when not active
+  // View transition settings
   .view {
+    // Base transition properties
+    transition:
+      opacity 0.6s ease-out,
+      filter 0.6s ease-out,
+      transform 0.6s ease-out;
+
+    // Hidden state (after transition completes)
     &.hidden {
       display: none !important;
+    }
+
+    // Transitioning OUT (blur + fade out)
+    &.transitioning-out {
+      opacity: 0;
+      filter: blur(24px);
+      transform: scale(0.85);
+      pointer-events: none;
+    }
+
+    // Transitioning IN (start blurred, animate to sharp)
+    &.transitioning-in {
+      opacity: 0;
+      filter: blur(24px);
+      transform: scale(1.15);
+    }
+
+    // Normal visible state (end of transition-in)
+    &:not(.hidden):not(.transitioning-out):not(.transitioning-in) {
+      opacity: 1;
+      filter: blur(0);
+      transform: scale(1);
     }
   }
 
