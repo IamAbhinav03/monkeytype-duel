@@ -46,4 +46,5 @@ jobs:
 
       - name: Deploy to dev
         run: |
-          docker compose -f docker/docker-compose.yml up -d --build
+          docker compose -f docker/docker-compose.yml build --no-cache
+          docker compose -f docker/docker-compose.yml up -d --force-recreate
