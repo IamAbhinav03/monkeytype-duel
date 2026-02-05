@@ -38,8 +38,29 @@ import { SimpleModal } from "../utils/simple-modal";
 
 const defaultName = "Guest";
 let name = "Guest";
+let currentPracticeRound: number | undefined = undefined;
 
 export const expectedVersion = isDevEnvironment() ? "dev" : "25.12.4";
+
+// Practice round banner helper functions
+function showPracticeRoundBanner(round: number): void {
+  const bannerEl = $(".practiceRoundBanner");
+  if (bannerEl.length === 0) {
+    // Create banner if it doesn't exist
+    $("body").append(`
+      <div class="practiceRoundBanner">
+        <span>Practice Round | P${round}</span>
+      </div>
+    `);
+  } else {
+    bannerEl.find("span").text(`Practice Round ${round}`);
+  }
+  $(".practiceRoundBanner").removeClass("hidden").addClass("visible");
+}
+
+function hidePracticeRoundBanner(): void {
+  $(".practiceRoundBanner").removeClass("visible").addClass("hidden");
+}
 
 function updateClientState(state: TribeTypes.ClientState): void {
   TribeState.setState(state);
@@ -594,6 +615,14 @@ TribeSocket.in.room.initRace((data) => {
   TribeCountdown.show2();
   TribeSound.play("start");
   TribeCarets.init();
+
+  // Store and display practice round info
+  currentPracticeRound = data.practiceRound;
+  if (currentPracticeRound !== undefined && currentPracticeRound <= 2) {
+    showPracticeRoundBanner(currentPracticeRound);
+  } else {
+    hidePracticeRoundBanner();
+  }
 });
 
 TribeSocket.in.room.stateChanged((data) => {
@@ -803,9 +832,19 @@ TribeSocket.in.room.readyTimerOver(() => {
   TribeResults.hideTimer();
 });
 
-// TribeSocket.in.room.backToLobby(() => {
-//   NavigationEvent.dispatch("/tribe");
-// });
+// Handle back to lobby with practice round info
+TribeSocket.in.room.backToLobby((data) => {
+  hidePracticeRoundBanner();
+
+  if (data.briefDisplay && data.practiceRound !== undefined) {
+    // Brief display during practice rounds - show next practice round number
+    showPracticeRoundBanner(data.practiceRound);
+  }
+
+  // Navigate back to tribe page
+  NavigationEvent.dispatch("/tribe");
+  console.log("nav.d back!");
+});
 
 TribeSocket.in.room.finalPositions((data) => {
   const room = TribeState.getRoom();

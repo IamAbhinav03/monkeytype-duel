@@ -132,8 +132,8 @@ export type ServerToClientEvents = {
   }) => void;
 
   // Race events
-  room_init_race: (data: { seed: number }) => void;
-  room_countdown: (data: { time: number }) => void;
+  room_init_race: (data: { seed: number; practiceRound?: number }) => void;
+  room_countdown: (data: { time: string }) => void;
   room_race_started: () => void;
   room_progress_update: (data: {
     users: Record<string, UserProgress>;
@@ -147,12 +147,16 @@ export type ServerToClientEvents = {
   room_finishTimer_countdown: (data: { time: number }) => void;
   room_readyTimer_countdown: (data: { time: number }) => void;
   room_readyTimer_over: () => void;
-  room_back_to_lobby: () => void;
+  room_back_to_lobby: (data: {
+    practiceRound?: number;
+    briefDisplay: boolean;
+  }) => void;
   room_final_positions: (data: {
     positions: FinalPositions;
     miniCrowns: MiniCrowns;
   }) => void;
   room_race_force_finish: (data: { reason: string }) => void;
+  room_lobby_autostart_countdown: (data: { time: number }) => void;
 
   // User events
   user_update_name: (data: { name: string }) => void;

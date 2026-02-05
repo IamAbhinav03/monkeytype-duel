@@ -3,6 +3,7 @@ export enum TimerType {
   FINISH = "finish",
   READY = "ready",
   PROGRESS = "progress",
+  LOBBY_AUTO_START = "LOBBY_AUTO_START",
 }
 
 type TimerConfig = {

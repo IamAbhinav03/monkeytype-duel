@@ -108,6 +108,7 @@ export type Room = {
   minRaw: number;
   minWpm: number;
   seed: number;
+  practiceRound: number;
 };
 
 export type PublicRoomData = {

@@ -185,7 +185,9 @@ function configChanged(
   Socket.on("room_config_changed", callback);
 }
 
-function initRace(callback: (data: { seed: number }) => void): void {
+function initRace(
+  callback: (data: { seed: number; practiceRound?: number }) => void,
+): void {
   Socket.on("room_init_race", callback);
 }
 
@@ -244,7 +246,9 @@ function readyTimerOver(callback: () => void): void {
   Socket.on("room_readyTimer_over", callback);
 }
 
-function backToLobby(callback: () => void): void {
+function backToLobby(
+  callback: (data: { practiceRound?: number; briefDisplay: boolean }) => void,
+): void {
   Socket.on("room_back_to_lobby", callback);
 }
 

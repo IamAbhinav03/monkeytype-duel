@@ -42,6 +42,7 @@ class RoomStore {
       minRaw: Infinity,
       minWpm: Infinity,
       seed: generateSeed(),
+      practiceRound: 0,
     };
 
     this.rooms.set(roomId, room);
