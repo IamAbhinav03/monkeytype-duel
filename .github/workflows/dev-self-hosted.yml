@@ -23,6 +23,7 @@ jobs:
           cat > docker/.env << EOF
           HTTP_PORT=8080
           BACKEND_PORT=5005
+          TRIBES_PORT=3005
           MONKEYTYPE_FRONTENDURL=https://monkeytype-test.rbh.makerspace.tools
           MONKEYTYPE_BACKENDURL=https://api.monkeytype-test.rbh.makerspace.tools
           RECAPTCHA_SITE_KEY=${{ secrets.RECAPTCHA_SITE_KEY }}
@@ -40,6 +41,7 @@ jobs:
           rm -f frontend/.env
           cat > frontend/.env << EOF
           FORCE_TRIBE=true
+          FORCE_DUEL=true
           EOF
 
       - name: Deploy to dev

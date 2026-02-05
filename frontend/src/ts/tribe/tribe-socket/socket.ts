@@ -9,6 +9,11 @@ function getTribesServerUrl(): string {
     return "https://tribe.monkeytype.com";
   }
 
+  // RBH dev/test deployment - tribes-server runs on same host, port 3005
+  if (hostname === "monkeytype-test.rbh.makerspace.tools") {
+    return "https://monkeytype-test.rbh.makerspace.tools:3005";
+  }
+
   // Development - use same host as frontend but on port 3005
   // This works for localhost, 127.0.0.1, and LAN IPs (e.g., 192.168.x.x)
   return `http://${hostname}:3005`;

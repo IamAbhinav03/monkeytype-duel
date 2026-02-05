@@ -13,6 +13,8 @@ services:
     depends_on:
       monkeytype-backend:
         condition: service_healthy
+      monkeytype-tribes-server:
+        condition: service_healthy
     env_file:
       - path: ./.env
         required: true
@@ -26,6 +28,27 @@ services:
       - MONKEYTYPE_BACKENDURL=${MONKEYTYPE_BACKENDURL}
       - RECAPTCHA_SITE_KEY=${RECAPTCHA_SITE_KEY:-}
       - FORCE_TRIBE=true
+      - FORCE_DUEL=true
+
+  monkeytype-tribes-server:
+    container_name: monkeytype-tribes-server
+    image: monkeytype-tribes-server:local
+    build:
+      context: ..
+      dockerfile: ./docker/tribes-server/Dockerfile
+    ports:
+      - "${TRIBES_PORT:-3005}:3005"
+    restart: on-failure
+    environment:
+      - PORT=3005
+      - MODE=prod
+      - TRIBES_VERSION=1.0.0
+    healthcheck:
+      test: ["CMD", "nc", "-z", "-v", "localhost", "3005"]
+      interval: 5s
+      timeout: 10s
+      retries: 15
+      start_period: 5s
 
   monkeytype-backend:
     container_name: monkeytype-backend
