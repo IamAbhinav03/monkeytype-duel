@@ -39,10 +39,10 @@ jobs:
       - name: Create frontend .env file
         run: |
           rm -f frontend/.env
-          cat > frontend/.env << EOF
-          FORCE_TRIBE=true
-          FORCE_DUEL=true
-          EOF
+          echo 'BACKEND_URL=###MONKEYTYPE_BACKENDURL###' >> frontend/.env
+          echo 'RECAPTCHA_SITE_KEY=###RECAPTCHA_SITE_KEY###' >> frontend/.env
+          echo 'FORCE_TRIBE=true' >> frontend/.env
+          echo 'FORCE_DUEL=true' >> frontend/.env
 
       - name: Deploy to dev
         run: |
