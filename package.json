@@ -22,6 +22,7 @@
     "build-be": "turbo run build --filter @monkeytype/backend",
     "build-fe": "turbo run build --filter @monkeytype/frontend",
     "build-fe-tribedev": "turbo run build-tribedev --filter @monkeytype/frontend",
+    "build-tribes": "turbo run build --filter @monkeytype/tribes-server",
     "build-pkg": "turbo run build --filter=\"./packages/*\"",
     "test": "turbo run test integration-test",
     "test-be": "turbo run test integration-test --filter @monkeytype/backend",
