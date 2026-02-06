@@ -1,0 +1,38 @@
+{
+  "name": "@monkeytype/user-handler",
+  "version": "1.0.0",
+  "private": true,
+  "license": "GPL-3.0",
+  "scripts": {
+    "lint": "oxlint .",
+    "lint-fast": "oxlint .",
+    "build": "tsc --build",
+    "watch": "tsc --build --watch",
+    "clean": "tsc --build --clean",
+    "ts-check": "tsc --noEmit",
+    "start": "node ./dist/server.js",
+    "test": "vitest",
+    "dev": "concurrently -p none \"tsx watch --clear-screen=false ./src/server.ts\" \"tsc --preserveWatchOutput --noEmit --watch\"",
+    "docker": "docker compose -f docker/compose.yml up"
+  },
+  "dependencies": {
+    "chalk": "4.1.2",
+    "cors": "2.8.5",
+    "dotenv": "16.4.5",
+    "express": "5.0.1",
+    "uuid": "10.0.0",
+    "winston": "3.6.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "2.8.12",
+    "@types/express": "5.0.0",
+    "@types/node": "22.10.2",
+    "@types/uuid": "10.0.0",
+    "concurrently": "8.2.2",
+    "oxlint": "0.15.3",
+    "tsx": "4.16.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  }
+}
