@@ -723,6 +723,13 @@
           &.faded {
             opacity: 0.25;
           }
+          &.dnf {
+            opacity: 0.35;
+            color: var(--sub-color);
+            .pos {
+              color: var(--sub-color);
+            }
+          }
           .progressAndGraph {
             width: 25%;
           }
@@ -1026,17 +1033,6 @@
         margin-bottom: 0.5rem;
       }
     }
-
-    a {
-      color: var(--main-color);
-      text-decoration: underline;
-    }
-  }
-
-  .eulaFooter {
-    color: var(--sub-color);
-    font-size: 0.85rem;
-    text-align: center;
   }
 
   .eulaCountdown {
@@ -1202,6 +1198,18 @@ body.duelFlowActive {
 
   // Suppress all PSA/warning banners
   #bannerCenter {
+    display: none !important;
+  }
+
+  // Hide all ads
+  .ad,
+  .advertisement,
+  #ad-vertical-left-wrapper,
+  #ad-vertical-right-wrapper,
+  #ad-footer-wrapper,
+  #ad-footer-small-wrapper,
+  #ad-result-wrapper,
+  #ad-result-small-wrapper {
     display: none !important;
   }
 }

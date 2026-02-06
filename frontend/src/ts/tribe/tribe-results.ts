@@ -182,6 +182,9 @@ export function updatePositions(
         }
       }
       for (const id of Object.keys(elements)) {
+        (elements[id] as JQuery).addClass("dnf");
+        (elements[id] as JQuery).find(".pos").text("DNF");
+        (elements[id] as JQuery).find(".points").text("");
         el.append(elements[id] as JQuery);
       }
     }
