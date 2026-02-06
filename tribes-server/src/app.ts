@@ -8,7 +8,13 @@ import { registerUserHandlers } from "./controllers/user-controller.js";
 import { registerDevHandlers } from "./controllers/dev-controller.js";
 import { registerDuelHandlers } from "./controllers/duel-controller.js";
 import { startMatchmaking } from "./services/matchmaking-service.js";
-import { loadOtpMap, getOtpMap } from "./utils/duel-otp.js";
+import {
+  loadOtpMap,
+  getOtpMap,
+  setOtp,
+  removeOtp,
+  setOtpMap,
+} from "./utils/duel-otp.js";
 import { duelStore } from "./stores/duel-store.js";
 import { DUEL_CONFIG } from "./config.js";
 import * as duelService from "./services/duel-service.js";
@@ -35,7 +41,7 @@ const isDevMode = mode === "dev" || mode === "development";
 const corsOptions = isDevMode
   ? {
       origin: true, // Allow all origins in dev mode
-      methods: ["GET", "POST"],
+      methods: ["GET", "POST", "PUT", "DELETE"],
       credentials: true,
     }
   : {
@@ -45,7 +51,7 @@ const corsOptions = isDevMode
         "https://monkeytype-test.rbh.makerspace.tools",
         "https://monkeytype.rbh.makerspace.tools",
       ],
-      methods: ["GET", "POST"],
+      methods: ["GET", "POST", "PUT", "DELETE"],
       credentials: true,
     };
 
@@ -97,6 +103,191 @@ app.get("/duel/spectator", (_req, res): void => {
     return;
   }
   res.json(buildDuelSpectatorState(io));
+});
+
+// --- Admin endpoints ---
+
+// GET /duel/admin/users — list all OTP users
+app.get("/duel/admin/users", (_req, res): void => {
+  if (!DUEL_CONFIG.ENABLED) {
+    res.status(404).json({ error: "Duel mode disabled" });
+    return;
+  }
+  res.json(getOtpMap());
+});
+
+// POST /duel/admin/users — add/update users
+// Body: { "123456": "alice", "654321": "bob" }
+// Merges into existing map. To replace entirely, use PUT.
+app.post("/duel/admin/users", (req, res): void => {
+  if (!DUEL_CONFIG.ENABLED) {
+    res.status(404).json({ error: "Duel mode disabled" });
+    return;
+  }
+
+  const body = req.body as Record<string, unknown>;
+  if (!body || typeof body !== "object") {
+    res.status(400).json({ error: "Body must be an object of otp: username" });
+    return;
+  }
+
+  let count = 0;
+  for (const [otp, username] of Object.entries(body)) {
+    if (typeof username !== "string" || username.length === 0) {
+      res.status(400).json({ error: `Invalid username for OTP "${otp}"` });
+      return;
+    }
+    setOtp(otp, username);
+    count++;
+  }
+
+  // Seed leaderboard for new users
+  duelStore.seedLeaderboardFromOtpMap(getOtpMap());
+
+  res.json({ ok: true, added: count, total: Object.keys(getOtpMap()).length });
+});
+
+// PUT /duel/admin/users — replace entire OTP map
+app.put("/duel/admin/users", (req, res): void => {
+  if (!DUEL_CONFIG.ENABLED) {
+    res.status(404).json({ error: "Duel mode disabled" });
+    return;
+  }
+
+  const body = req.body as Record<string, unknown>;
+  if (!body || typeof body !== "object") {
+    res.status(400).json({ error: "Body must be an object of otp: username" });
+    return;
+  }
+
+  const newMap: Record<string, string> = {};
+  for (const [otp, username] of Object.entries(body)) {
+    if (typeof username !== "string" || username.length === 0) {
+      res.status(400).json({ error: `Invalid username for OTP "${otp}"` });
+      return;
+    }
+    newMap[otp] = username;
+  }
+
+  setOtpMap(newMap);
+  duelStore.seedLeaderboardFromOtpMap(getOtpMap());
+
+  res.json({ ok: true, total: Object.keys(newMap).length });
+});
+
+// DELETE /duel/admin/users/:otp — remove a single user
+app.delete("/duel/admin/users/:otp", (req, res): void => {
+  if (!DUEL_CONFIG.ENABLED) {
+    res.status(404).json({ error: "Duel mode disabled" });
+    return;
+  }
+
+  const removed = removeOtp(req.params["otp"] ?? "");
+  if (!removed) {
+    res.status(404).json({ error: "OTP not found" });
+    return;
+  }
+  res.json({ ok: true, total: Object.keys(getOtpMap()).length });
+});
+
+// GET /duel/admin/config — view mutable config
+app.get("/duel/admin/config", (_req, res): void => {
+  if (!DUEL_CONFIG.ENABLED) {
+    res.status(404).json({ error: "Duel mode disabled" });
+    return;
+  }
+  res.json({
+    PRACTICE_COUNT: DUEL_CONFIG.PRACTICE_COUNT,
+    RACE_DURATION_SECONDS: DUEL_CONFIG.RACE_DURATION_SECONDS,
+    START_DELAY_MS: DUEL_CONFIG.START_DELAY_MS,
+  });
+});
+
+// POST /duel/admin/config — update mutable config fields
+// Body: { "RACE_DURATION_SECONDS": 60, "PRACTICE_COUNT": 1 }
+app.post("/duel/admin/config", (req, res): void => {
+  if (!DUEL_CONFIG.ENABLED) {
+    res.status(404).json({ error: "Duel mode disabled" });
+    return;
+  }
+
+  const body = req.body as Record<string, unknown>;
+  const updated: string[] = [];
+
+  if (typeof body["PRACTICE_COUNT"] === "number") {
+    (DUEL_CONFIG as { PRACTICE_COUNT: number }).PRACTICE_COUNT =
+      body["PRACTICE_COUNT"];
+    updated.push("PRACTICE_COUNT");
+  }
+  if (typeof body["RACE_DURATION_SECONDS"] === "number") {
+    (DUEL_CONFIG as { RACE_DURATION_SECONDS: number }).RACE_DURATION_SECONDS =
+      body["RACE_DURATION_SECONDS"];
+    updated.push("RACE_DURATION_SECONDS");
+  }
+  if (typeof body["START_DELAY_MS"] === "number") {
+    (DUEL_CONFIG as { START_DELAY_MS: number }).START_DELAY_MS =
+      body["START_DELAY_MS"];
+    updated.push("START_DELAY_MS");
+  }
+
+  if (updated.length === 0) {
+    res.status(400).json({
+      error:
+        "No valid fields. Use: PRACTICE_COUNT, RACE_DURATION_SECONDS, START_DELAY_MS",
+    });
+    return;
+  }
+
+  Logger.info(`Config updated: ${updated.join(", ")}`);
+  res.json({
+    ok: true,
+    updated,
+    config: {
+      PRACTICE_COUNT: DUEL_CONFIG.PRACTICE_COUNT,
+      RACE_DURATION_SECONDS: DUEL_CONFIG.RACE_DURATION_SECONDS,
+      START_DELAY_MS: DUEL_CONFIG.START_DELAY_MS,
+    },
+  });
+});
+
+// POST /duel/admin/leaderboard — set leaderboard entries
+// Body: { "123456": { "name": "alice", "wpm": 120, "acc": 98, "raw": 125, "consistency": 85 } }
+app.post("/duel/admin/leaderboard", (req, res): void => {
+  if (!DUEL_CONFIG.ENABLED) {
+    res.status(404).json({ error: "Duel mode disabled" });
+    return;
+  }
+
+  const body = req.body as Record<string, unknown>;
+  if (!body || typeof body !== "object") {
+    res.status(400).json({ error: "Body must be an object of userId: entry" });
+    return;
+  }
+
+  let count = 0;
+  for (const [userId, raw] of Object.entries(body)) {
+    if (!raw || typeof raw !== "object") {
+      res.status(400).json({ error: `Invalid entry for "${userId}"` });
+      return;
+    }
+    const entry = raw as Record<string, unknown>;
+    if (typeof entry["name"] !== "string") {
+      res.status(400).json({ error: `Missing name for "${userId}"` });
+      return;
+    }
+    duelStore.setLeaderboardEntry(userId, {
+      name: entry["name"],
+      wpm: typeof entry["wpm"] === "number" ? entry["wpm"] : -1,
+      acc: typeof entry["acc"] === "number" ? entry["acc"] : -1,
+      raw: typeof entry["raw"] === "number" ? entry["raw"] : -1,
+      consistency:
+        typeof entry["consistency"] === "number" ? entry["consistency"] : -1,
+      date: typeof entry["date"] === "number" ? entry["date"] : Date.now(),
+    });
+    count++;
+  }
+
+  res.json({ ok: true, updated: count });
 });
 
 // Create Socket.IO server

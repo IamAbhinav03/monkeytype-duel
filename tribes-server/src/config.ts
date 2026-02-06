@@ -15,10 +15,10 @@ export const DUEL_CONFIG = {
   START_DELAY_MS: parseInt(process.env["DUEL_START_DELAY_MS"] ?? "10000", 10),
 
   // Number of practice runs required before joining lobby
-  PRACTICE_COUNT: 2,
+  PRACTICE_COUNT: 2 as number,
 
   // Race duration in seconds
-  RACE_DURATION_SECONDS: 30,
+  RACE_DURATION_SECONDS: 30 as number,
 
   // Fixed room configuration for duel races
   ROOM_CONFIG: {
@@ -48,6 +48,6 @@ export const DUEL_CONFIG = {
       delimiter: " ",
     },
   },
-} as const;
+};
 
 export type DuelSide = "L" | "R";

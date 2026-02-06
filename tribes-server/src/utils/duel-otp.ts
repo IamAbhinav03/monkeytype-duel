@@ -1,6 +1,6 @@
 // OTP loader and validator for duel authentication
 import { z } from "zod";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 import { DUEL_CONFIG } from "../config.js";
 import Logger from "./logger.js";
 
@@ -80,4 +80,44 @@ export function getOtpMap(): Readonly<Record<string, string>> {
  */
 export function isLoaded(): boolean {
   return loaded;
+}
+
+/**
+ * Add or update an OTP entry and persist to disk.
+ */
+export function setOtp(otp: string, username: string): void {
+  otpMap[otp] = username;
+  loaded = true;
+  persistOtpMap();
+  Logger.info(`OTP set: ${otp} -> ${username}`);
+}
+
+/**
+ * Remove an OTP entry and persist to disk.
+ */
+export function removeOtp(otp: string): boolean {
+  if (otpMap[otp] === undefined) return false;
+  // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+  delete otpMap[otp];
+  persistOtpMap();
+  Logger.info(`OTP removed: ${otp}`);
+  return true;
+}
+
+/**
+ * Replace the entire OTP map and persist to disk.
+ */
+export function setOtpMap(newMap: Record<string, string>): void {
+  otpMap = { ...newMap };
+  loaded = true;
+  persistOtpMap();
+  Logger.info(`OTP map replaced with ${Object.keys(otpMap).length} entries`);
+}
+
+function persistOtpMap(): void {
+  try {
+    writeFileSync(DUEL_CONFIG.OTP_PATH, JSON.stringify(otpMap, null, 2));
+  } catch (error) {
+    Logger.error(`Failed to persist OTP map: ${error}`);
+  }
 }

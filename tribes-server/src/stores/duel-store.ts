@@ -641,6 +641,14 @@ class DuelStore {
     return leaderboard;
   }
 
+  /**
+   * Set a leaderboard entry directly (admin use).
+   */
+  setLeaderboardEntry(userId: string, entry: DuelLeaderboardEntry): void {
+    this.leaderboard[userId] = entry;
+    this.persistResults();
+  }
+
   private upsertLeaderboardEntry(
     side: DuelResultSide,
     timestamp: number,
