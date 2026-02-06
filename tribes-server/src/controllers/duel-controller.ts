@@ -71,6 +71,11 @@ export function registerDuelHandlers(
     callback(result);
   });
 
+  socket.on("duel_reset_session", (callback) => {
+    const result = duelService.resetSession(io, socket);
+    callback(result);
+  });
+
   // ============================================================
   // Time sync for synchronized start
   // ============================================================

@@ -45,6 +45,27 @@ const disconnectGracePeriods: Map<
 > = new Map();
 const DISCONNECT_GRACE_MS = 10_000; // 10 seconds
 
+function clearGracePeriodForSocket(socketId: string): void {
+  const timer = disconnectGracePeriods.get(socketId);
+  if (!timer) return;
+  clearTimeout(timer);
+  disconnectGracePeriods.delete(socketId);
+}
+
+function buildJoinLobbyResponse(room: Room): DuelAckResponse {
+  return {
+    ok: true,
+    data: {
+      room,
+      waiting: room.size < 2,
+      message:
+        room.size < 2
+          ? "Waiting for opponent..."
+          : "Both players present. Race starting!",
+    },
+  };
+}
+
 // ============================================================
 // System Registration
 // ============================================================
@@ -67,7 +88,24 @@ export function registerSystem(
   // Check if socket already registered
   const existingSide = duelStore.getSideBySocket(socket.id);
   if (existingSide !== undefined) {
-    return { ok: false, error: "Already registered to a side" };
+    if (existingSide === side) {
+      const participant = duelStore.getParticipantBySocket(socket.id);
+      return {
+        ok: true,
+        data: {
+          side,
+          wasAuthenticated: participant?.isAuthenticated ?? false,
+          practiceCount: participant?.practiceCount ?? 0,
+          username: participant?.username,
+          userId: participant?.userId,
+        },
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Already registered to side ${existingSide}`,
+    };
   }
 
   // If side is occupied, check if existing socket is dead
@@ -82,6 +120,7 @@ export function registerSystem(
         Logger.info(
           `Dead socket ${existingParticipant.socketId} detected on side ${side}, transferring to ${socket.id}`,
         );
+        clearGracePeriodForSocket(existingParticipant.socketId);
         const transferred = duelStore.transferSide(
           existingParticipant.socketId,
           socket.id,
@@ -89,6 +128,15 @@ export function registerSystem(
         if (transferred) {
           (socket.data as SocketData & { duelSide?: DuelSide }).duelSide = side;
           socket.data.name = transferred.username || socket.data.name;
+
+          const roomTransfer = roomStore.transferUserSocket(
+            existingParticipant.socketId,
+            socket.id,
+          );
+          if (roomTransfer) {
+            socket.data.roomId = roomTransfer.room.id;
+            void socket.join(roomTransfer.room.id);
+          }
 
           return {
             ok: true,
@@ -122,6 +170,15 @@ export function registerSystem(
             (socket.data as SocketData & { duelSide?: DuelSide }).duelSide =
               side;
             socket.data.name = transferred.username || socket.data.name;
+
+            const roomTransfer = roomStore.transferUserSocket(
+              existingParticipant.socketId,
+              socket.id,
+            );
+            if (roomTransfer) {
+              socket.data.roomId = roomTransfer.room.id;
+              void socket.join(roomTransfer.room.id);
+            }
 
             return {
               ok: true,
@@ -180,7 +237,22 @@ export function authenticate(
 
   const participant = duelStore.getParticipantBySocket(socket.id);
   if (participant?.isAuthenticated) {
-    return { ok: false, error: "Already authenticated" };
+    if (participant.userId === otp) {
+      return {
+        ok: true,
+        data: {
+          userId: participant.userId,
+          username: participant.username,
+          side,
+          alreadyAuthenticated: true,
+        },
+      };
+    }
+
+    return {
+      ok: false,
+      error: "Already authenticated. Reset session before using a new OTP.",
+    };
   }
 
   const validation = validateOtp(otp);
@@ -282,6 +354,15 @@ export function joinLobby(
     return { ok: false, error: "Not registered" };
   }
 
+  const socketRoomId = roomStore.getRoomIdBySocketId(socket.id);
+  if (socketRoomId) {
+    const socketRoom = roomStore.getRoom(socketRoomId);
+    if (socketRoom && socketRoom.type === "duel") {
+      socket.data.roomId = socketRoom.id;
+      return buildJoinLobbyResponse(socketRoom);
+    }
+  }
+
   // Get or create duel room
   let roomId = duelStore.getActiveRoom();
 
@@ -316,20 +397,18 @@ export function joinLobby(
     // Emit room_joined to the creator
     socket.emit("room_joined", { room });
 
-    return {
-      ok: true,
-      data: {
-        room,
-        waiting: true,
-        message: "Waiting for opponent...",
-      },
-    };
+    return buildJoinLobbyResponse(room);
   } else {
     // Join existing duel room
     const existingRoom = roomStore.getRoom(roomId);
     if (!existingRoom) {
       duelStore.clearActiveRoom();
       return { ok: false, error: "Duel room not found, please retry" };
+    }
+
+    if (existingRoom.users[socket.id]) {
+      socket.data.roomId = existingRoom.id;
+      return buildJoinLobbyResponse(existingRoom);
     }
 
     const result = roomStore.addUserToRoom(
@@ -417,14 +496,7 @@ export function joinLobby(
       }
     }, DUEL_CONFIG.START_DELAY_MS);
 
-    return {
-      ok: true,
-      data: {
-        room: result.room,
-        waiting: false,
-        message: "Both players present. Race starting!",
-      },
-    };
+    return buildJoinLobbyResponse(result.room);
   }
 }
 
@@ -482,6 +554,60 @@ export function handleDisconnect(io: TribesServer, socket: TribesSocket): void {
   }, DISCONNECT_GRACE_MS);
 
   disconnectGracePeriods.set(socket.id, timer);
+}
+
+export function resetSession(
+  io: TribesServer,
+  socket: TribesSocket,
+): DuelAckResponse {
+  if (!DUEL_CONFIG.ENABLED) {
+    return { ok: false, error: "Duel mode is disabled" };
+  }
+
+  const side = duelStore.getSideBySocket(socket.id);
+  if (side === undefined) {
+    return { ok: false, error: "Not registered to a side" };
+  }
+
+  const success = duelStore.deauthenticate(socket.id);
+  if (!success) {
+    return { ok: false, error: "Failed to reset session" };
+  }
+
+  socket.data.name = "Guest";
+  const roomId = roomStore.getRoomIdBySocketId(socket.id);
+  if (roomId) {
+    const result = roomStore.removeUserFromRoom(socket.id);
+
+    if (result) {
+      void socket.leave(result.room.id);
+      socket.emit("room_left");
+      io.to(result.room.id).emit("room_player_left", { userId: socket.id });
+
+      if (result.wasLeader) {
+        const newLeader = Object.values(result.room.users).find(
+          (user) => user.isLeader,
+        );
+        if (newLeader) {
+          io.to(result.room.id).emit("room_leader_changed", {
+            userId: newLeader.id,
+          });
+        }
+      }
+    }
+
+    if (!roomStore.getRoom(roomId)) {
+      duelStore.clearActiveRoom();
+      duelStore.resetForNextDuel();
+    }
+
+    delete socket.data.roomId;
+  }
+
+  clearGracePeriodForSocket(socket.id);
+
+  Logger.info(`Reset duel session for socket ${socket.id} (Side ${side})`);
+  return { ok: true, data: { side } };
 }
 
 // ============================================================

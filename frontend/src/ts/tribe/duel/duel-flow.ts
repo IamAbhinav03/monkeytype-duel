@@ -16,6 +16,7 @@ import TribeSocket from "../tribe-socket";
 import * as TribeSound from "../tribe-sound";
 import * as TribeCarets from "../tribe-carets";
 import type { DuelSide } from "./duel-state";
+import * as TribeState from "../tribe-state";
 
 // Production durations (overridable by server for race via duel_race_scheduled)
 const PRACTICE_1_DURATION_SECONDS = 60; // Test 1: 1 minute
@@ -29,6 +30,11 @@ const COUNTDOWN_TO_LOBBY_SECONDS = 5;
 
 // Callbacks for external integration
 let onConnectedCallback: (() => void | Promise<void>) | undefined;
+let socketHandlersRegistered = false;
+let eulaInterval: ReturnType<typeof setInterval> | undefined;
+let eulaTimeout: ReturnType<typeof setTimeout> | undefined;
+let waitingNavigationTimeout: ReturnType<typeof setTimeout> | undefined;
+let showLobbyTimeout: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * Initialize the duel flow.
@@ -36,6 +42,11 @@ let onConnectedCallback: (() => void | Promise<void>) | undefined;
  */
 export async function init(): Promise<void> {
   console.log("[DuelFlow] Initializing...");
+
+  cleanupTransientTimers();
+  hideAutoAdvanceButton();
+  hideCountdownBelowResults();
+  hideDuelBanner();
 
   // Initialize state (checks localStorage for side)
   const initialState = DuelState.initDuelState();
@@ -81,7 +92,7 @@ async function onSocketConnectedForOtp(): Promise<void> {
   }
 
   // Register our side with the server
-  const result = await TribeSocket.out.duel.registerSystem(side);
+  const result = await registerCurrentSide(side, true);
 
   if (!result.ok) {
     // If side is taken, go back to system select
@@ -99,9 +110,6 @@ async function onSocketConnectedForOtp(): Promise<void> {
     }
     return;
   }
-
-  // Perform time sync
-  await DuelTimeSync.sync();
 
   // Check if server preserved auth from a previous session (reconnect)
   const data = result.data as
@@ -121,18 +129,16 @@ async function onSocketConnectedForOtp(): Promise<void> {
     data.userId !== ""
   ) {
     console.log(
-      `[DuelFlow] Reconnected with preserved auth: ${data.username}, practice=${data.practiceCount}`,
+      `[DuelFlow] Found preserved auth for ${data.username}, resetting to OTP`,
     );
-    DuelState.restoreState(data.practiceCount ?? 0, data.userId, data.username);
 
-    // Resume from correct flow state
-    const practiceCount = data.practiceCount ?? 0;
-    if (practiceCount >= 2) {
-      await joinDuelLobby();
-    } else {
-      await startPracticeFlow();
+    const resetResponse = await TribeSocket.out.duel.resetSession();
+    if (!resetResponse.ok) {
+      TribePageOtp.showError(resetResponse.error ?? "Failed to reset session");
+      return;
     }
-    return;
+
+    DuelState.clearAuthentication();
   }
 
   // Stay on OTP page, ready for authentication
@@ -144,6 +150,10 @@ async function onSocketConnectedForOtp(): Promise<void> {
  */
 async function handleSideSelect(side: DuelSide): Promise<void> {
   console.log(`[DuelFlow] Side selected: ${side}`);
+
+  cleanupTransientTimers();
+  hideAutoAdvanceButton();
+  hideCountdownBelowResults();
 
   TribePageSystem.disable();
   TribePagePreloader.updateText("Connecting...");
@@ -167,6 +177,13 @@ async function handleSideSelect(side: DuelSide): Promise<void> {
 async function handleAuthenticate(otp: string): Promise<boolean> {
   console.log(`[DuelFlow] Authenticating with OTP...`);
 
+  if (DuelState.getFlowState() !== "OTP") {
+    console.warn(
+      `[DuelFlow] Ignoring OTP submit outside OTP state (${DuelState.getFlowState()})`,
+    );
+    return false;
+  }
+
   TribePageOtp.hideError();
 
   // If not connected, connect first
@@ -183,7 +200,7 @@ async function handleAuthenticate(otp: string): Promise<boolean> {
       }
 
       // Register side
-      const registerResult = await TribeSocket.out.duel.registerSystem(side);
+      const registerResult = await registerCurrentSide(side, true);
       if (!registerResult.ok) {
         TribePageOtp.showError(
           registerResult.error ?? "Failed to register side",
@@ -191,9 +208,6 @@ async function handleAuthenticate(otp: string): Promise<boolean> {
         TribePageOtp.setLoading(false);
         return;
       }
-
-      // Perform time sync
-      await DuelTimeSync.sync();
 
       // Now authenticate
       const result = await doAuthenticate(otp);
@@ -222,6 +236,43 @@ async function doAuthenticate(otp: string): Promise<boolean> {
   const response = await TribeSocket.out.duel.authenticate(otp);
 
   if (!response.ok) {
+    if (response.error?.includes("Already authenticated")) {
+      const side = DuelState.getSide();
+      if (!side) {
+        TribePageOtp.showError("No side selected");
+        return false;
+      }
+
+      const resetResponse = await TribeSocket.out.duel.resetSession();
+      if (!resetResponse.ok) {
+        TribePageOtp.showError(resetResponse.error ?? "Session reset failed");
+        return false;
+      }
+
+      DuelState.clearAuthentication();
+
+      const reRegister = await registerCurrentSide(side, true);
+      if (!reRegister.ok) {
+        TribePageOtp.showError(reRegister.error ?? "Failed to register side");
+        return false;
+      }
+
+      const retryResponse = await TribeSocket.out.duel.authenticate(otp);
+      if (!retryResponse.ok) {
+        TribePageOtp.showError(retryResponse.error ?? "Authentication failed");
+        return false;
+      }
+
+      const retryData = retryResponse.data as
+        | { userId: string; username: string }
+        | undefined;
+      if (retryData) {
+        DuelState.setAuthenticated(retryData.userId, retryData.username);
+      }
+
+      return true;
+    }
+
     TribePageOtp.showError(response.error ?? "Authentication failed");
     return false;
   }
@@ -251,7 +302,7 @@ async function onSocketConnected(): Promise<void> {
   }
 
   // Register our side with the server
-  const result = await TribeSocket.out.duel.registerSystem(side);
+  const result = await registerCurrentSide(side, true);
 
   if (!result.ok) {
     Notifications.add(result.error ?? "Failed to register side", -1);
@@ -273,9 +324,6 @@ async function onSocketConnected(): Promise<void> {
     return;
   }
 
-  // Perform time sync
-  await DuelTimeSync.sync();
-
   // Navigate to OTP page
   TribePageOtp.updateSideLabel();
   await TribePages.change("otp");
@@ -293,18 +341,27 @@ async function showEulaPage(): Promise<void> {
   console.log("[DuelFlow] Showing EULA page");
   DuelState.setFlowState("EULA");
 
+  if (eulaTimeout) {
+    clearTimeout(eulaTimeout);
+    eulaTimeout = undefined;
+  }
+  if (eulaInterval) {
+    clearInterval(eulaInterval);
+    eulaInterval = undefined;
+  }
+
   // Navigate to tribe page to show the EULA tribePage
   NavigationEvent.dispatch("/tribe", { tribeOverride: true });
 
   // Wait for page transition, then switch to EULA tribePage
-  setTimeout(() => {
+  eulaTimeout = setTimeout(() => {
     void TribePages.change("eula");
   }, 100);
 
   // Start countdown on EULA page
   let remaining = EULA_DURATION_SECONDS;
 
-  const eulaInterval = setInterval(() => {
+  eulaInterval = setInterval(() => {
     remaining--;
     const timerEl = document.querySelector(".eulaCountdownTimer");
     if (timerEl) {
@@ -312,7 +369,10 @@ async function showEulaPage(): Promise<void> {
     }
 
     if (remaining <= 0) {
-      clearInterval(eulaInterval);
+      if (eulaInterval) {
+        clearInterval(eulaInterval);
+        eulaInterval = undefined;
+      }
       void startPracticeFlow();
     }
   }, 1000);
@@ -346,6 +406,11 @@ function hideDuelBanner(): void {
  */
 async function startPracticeFlow(): Promise<void> {
   console.log("[DuelFlow] Starting practice flow");
+
+  if (!DuelState.isUserAuthenticated()) {
+    console.warn("[DuelFlow] startPracticeFlow aborted - not authenticated");
+    return;
+  }
 
   const practiceNum = DuelState.getPracticeCount() + 1;
   const isPractice1 = practiceNum === 1;
@@ -403,6 +468,13 @@ export async function onPracticeComplete(): Promise<void> {
   }
 
   const isPractice1 = currentState === "PRACTICE_1";
+
+  if (!DuelState.isUserAuthenticated()) {
+    console.warn(
+      "[DuelFlow] Practice complete ignored - user not authenticated",
+    );
+    return;
+  }
 
   // Hide banner on result page
   hideDuelBanner();
@@ -537,9 +609,12 @@ function hideCountdownBelowResults(): void {
 async function joinDuelLobby(): Promise<void> {
   console.log("[DuelFlow] Joining duel lobby");
 
+  if (!DuelState.isUserAuthenticated()) {
+    console.warn("[DuelFlow] joinDuelLobby aborted - not authenticated");
+    return;
+  }
+
   DuelState.setFlowState("LOBBY");
-  // Clear persisted side so refresh from lobby goes to SYSTEM_SELECT
-  DuelState.clearPersistedSide();
 
   // Join lobby on server — wait for response so room is set up before navigating
   try {
@@ -557,7 +632,10 @@ async function joinDuelLobby(): Promise<void> {
   });
 
   // Set up the duel lobby UI after navigation
-  setTimeout(() => {
+  if (showLobbyTimeout) {
+    clearTimeout(showLobbyTimeout);
+  }
+  showLobbyTimeout = setTimeout(() => {
     setupDuelLobby();
   }, 300);
 }
@@ -574,8 +652,7 @@ function setupDuelLobby(): void {
   if (existing) existing.remove();
 
   // Get room info
-  const TribeState = getTribeStateSync();
-  const room = TribeState?.getRoom();
+  const room = TribeState.getRoom();
   const roomId = room?.id ?? "---";
   const users = room?.users ?? {};
   const userCount = Object.keys(users).length;
@@ -625,25 +702,6 @@ function setupDuelLobby(): void {
 
   lobby.prepend(header);
 }
-
-/**
- * Get TribeState synchronously (already imported in module scope).
- */
-let _tribeStateCache: typeof import("../tribe-state") | undefined;
-
-function getTribeStateSync(): typeof import("../tribe-state") | undefined {
-  if (_tribeStateCache) return _tribeStateCache;
-  // Lazy load — first call returns undefined, subsequent calls return cached
-  void import("../tribe-state").then((mod) => {
-    _tribeStateCache = mod;
-  });
-  return undefined;
-}
-
-// Pre-load TribeState at module init
-void import("../tribe-state").then((mod) => {
-  _tribeStateCache = mod;
-});
 
 /**
  * Handle opponent joined event.
@@ -698,6 +756,13 @@ export function onRaceScheduled(
   serverRaceDuration?: number,
 ): void {
   console.log(`[DuelFlow] Race scheduled for ${startAt}, seed: ${seed}`);
+
+  if (DuelState.getFlowState() !== "LOBBY") {
+    console.warn(
+      `[DuelFlow] Ignoring race schedule outside lobby (state=${DuelState.getFlowState()})`,
+    );
+    return;
+  }
 
   // Use server-provided race duration if available
   if (serverRaceDuration !== undefined && serverRaceDuration > 0) {
@@ -756,7 +821,10 @@ export function onRaceScheduled(
   });
 
   // After waiting page duration, navigate to test page
-  setTimeout(() => {
+  if (waitingNavigationTimeout) {
+    clearTimeout(waitingNavigationTimeout);
+  }
+  waitingNavigationTimeout = setTimeout(() => {
     navigateToTestAndStartCountdown(startAt);
   }, WAITING_PAGE_DURATION_MS);
 }
@@ -790,8 +858,7 @@ function navigateToTestAndStartCountdown(startAt: number): void {
  */
 function initDuelCarets(): void {
   // Set all room users to isTyping so TribeCarets.init() creates carets for them
-  const TribeState = getTribeStateSync();
-  const room = TribeState?.getRoom();
+  const room = TribeState.getRoom();
   if (room) {
     for (const user of Object.values(room.users)) {
       user.isTyping = true;
@@ -928,6 +995,13 @@ let autoAdvanceInterval: ReturnType<typeof setInterval> | undefined;
 export function onDuelRaceComplete(): void {
   console.log("[DuelFlow] Duel race completed");
 
+  if (DuelState.getFlowState() !== "RACING") {
+    console.warn(
+      `[DuelFlow] Ignoring duel race complete outside RACING (state=${DuelState.getFlowState()})`,
+    );
+    return;
+  }
+
   DuelState.setFlowState("RESULTS");
   hideDuelBanner();
   TribeCarets.destroyAll();
@@ -1032,21 +1106,36 @@ function onAutoAdvance(): void {
   console.log("[DuelFlow] Auto-advancing from results");
   hideAutoAdvanceButton();
   hideCountdownBelowResults();
+  cleanupTransientTimers();
 
-  // Transition back to LOBBY state so the lobby page shows properly
-  DuelState.setFlowState("LOBBY");
-  // Clear persisted side so refresh from lobby goes to SYSTEM_SELECT
-  DuelState.clearPersistedSide();
+  const side = DuelState.getSide();
+  if (!side) {
+    DuelState.clearAuthentication();
+    TribePageOtp.reset();
+    NavigationEvent.dispatch("/tribe", {
+      tribeOverride: true,
+    });
+    void TribePages.change("system");
+    return;
+  }
 
-  // Navigate back to tribe page
+  void TribeSocket.out.duel.resetSession().catch((err: unknown) => {
+    console.warn("[DuelFlow] Failed to reset duel session:", err);
+  });
+
+  DuelState.clearAuthentication();
+  TribePageOtp.reset();
+  TribePageOtp.updateSideLabel();
+
   NavigationEvent.dispatch("/tribe", {
     tribeOverride: true,
   });
 
-  // Set up the duel lobby UI after navigation
   setTimeout(() => {
-    setupDuelLobby();
-  }, 300);
+    void TribePages.change("otp").then(() => {
+      TribePageOtp.focusInput();
+    });
+  });
 }
 
 /**
@@ -1074,6 +1163,17 @@ export function isRacing(): boolean {
  * Full reset - clears everything including localStorage.
  */
 export function fullReset(): void {
+  cleanupTransientTimers();
+  hideAutoAdvanceButton();
+  hideCountdownBelowResults();
+  hideDuelBanner();
+
+  if (TribeSocket.getId()) {
+    void TribeSocket.out.duel.resetSession().catch((err: unknown) => {
+      console.warn("[DuelFlow] Failed to reset session during fullReset:", err);
+    });
+  }
+
   DuelState.fullReset();
   DuelTimeSync.reset();
   TribePageSystem.reset();
@@ -1084,6 +1184,20 @@ export function fullReset(): void {
  * Reset to OTP page (keeps side).
  */
 export function resetToOtp(): void {
+  cleanupTransientTimers();
+  hideAutoAdvanceButton();
+  hideCountdownBelowResults();
+  hideDuelBanner();
+
+  if (TribeSocket.getId()) {
+    void TribeSocket.out.duel.resetSession().catch((err: unknown) => {
+      console.warn(
+        "[DuelFlow] Failed to reset session during resetToOtp:",
+        err,
+      );
+    });
+  }
+
   DuelState.resetToOtp();
   DuelTimeSync.reset();
   TribePageOtp.reset();
@@ -1120,6 +1234,9 @@ window.addEventListener("beforeunload", (e) => {
 // These should be registered when socket connects
 
 export function registerSocketHandlers(): void {
+  if (socketHandlersRegistered) return;
+  socketHandlersRegistered = true;
+
   // Opponent events
   TribeSocket.in.duel.opponentJoined((data) => {
     onOpponentJoined(data.username, data.side);
@@ -1148,6 +1265,8 @@ TribeSocket.in.system.connect(() => {
 });
 
 TribeSocket.in.system.disconnect(() => {
+  cleanupTransientTimers();
+
   // On disconnect during duel flow, show preloader with reconnect
   const state = DuelState.getFlowState();
   if (state !== "SYSTEM_SELECT") {
@@ -1157,3 +1276,39 @@ TribeSocket.in.system.disconnect(() => {
     void TribePages.change("preloader");
   }
 });
+
+function cleanupTransientTimers(): void {
+  if (eulaInterval) {
+    clearInterval(eulaInterval);
+    eulaInterval = undefined;
+  }
+  if (eulaTimeout) {
+    clearTimeout(eulaTimeout);
+    eulaTimeout = undefined;
+  }
+  if (waitingNavigationTimeout) {
+    clearTimeout(waitingNavigationTimeout);
+    waitingNavigationTimeout = undefined;
+  }
+  if (showLobbyTimeout) {
+    clearTimeout(showLobbyTimeout);
+    showLobbyTimeout = undefined;
+  }
+}
+
+async function registerCurrentSide(
+  side: DuelSide,
+  performTimeSync: boolean,
+): Promise<{ ok: boolean; error?: string; data?: unknown }> {
+  const result = await TribeSocket.out.duel.registerSystem(side);
+
+  if (!result.ok) {
+    return result;
+  }
+
+  if (performTimeSync) {
+    await DuelTimeSync.sync();
+  }
+
+  return result;
+}

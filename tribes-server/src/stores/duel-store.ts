@@ -140,6 +140,18 @@ class DuelStore {
     return participant;
   }
 
+  deauthenticate(socketId: string): boolean {
+    const participant = this.getParticipantBySocket(socketId);
+    if (!participant) return false;
+
+    participant.userId = "";
+    participant.username = "";
+    participant.practiceCount = 0;
+    participant.isReady = false;
+    participant.isAuthenticated = false;
+    return true;
+  }
+
   /**
    * Check if a side is available (unoccupied).
    */
