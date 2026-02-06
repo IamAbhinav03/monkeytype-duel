@@ -16,7 +16,6 @@
     "docker": "docker compose -f docker/compose.yml up"
   },
   "dependencies": {
-    "@monkeytype/schemas": "workspace:*",
     "chalk": "4.1.2",
     "cors": "2.8.5",
     "dotenv": "16.4.5",
@@ -26,8 +25,6 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "@monkeytype/oxlint-config": "workspace:*",
-    "@monkeytype/typescript-config": "workspace:*",
     "@types/cors": "2.8.12",
     "@types/express": "5.0.0",
     "@types/node": "22.10.2",

@@ -1,7 +1,10 @@
 import { Request, Response } from "express";
 import { UserService } from "../services/user.service.js";
 import logger from "../utils/logger.js";
-import { CreateUserDto, UpdateUserDto } from "../types/user.types.js";
+import {
+  CreateUserDtoSchema,
+  UpdateUserDtoSchema,
+} from "../types/user.types.js";
 
 export class UserController {
   private userService: UserService;
@@ -12,7 +15,8 @@ export class UserController {
 
   async getUser(req: Request, res: Response): Promise<void> {
     try {
-      const { userId } = req.params;
+      const userIdParam = req.params["userId"];
+      const userId = Array.isArray(userIdParam) ? userIdParam[0] : userIdParam;
 
       if (userId === undefined || userId === null || userId === "") {
         res.status(400).json({ error: "User ID is required" });
@@ -35,9 +39,16 @@ export class UserController {
 
   async createUser(req: Request, res: Response): Promise<void> {
     try {
-      const userData = req.body as CreateUserDto;
+      const parseResult = CreateUserDtoSchema.safeParse(req.body);
 
-      const user = await this.userService.createUser(userData);
+      if (!parseResult.success) {
+        res
+          .status(400)
+          .json({ error: "Invalid user data", details: parseResult.error });
+        return;
+      }
+
+      const user = await this.userService.createUser(parseResult.data);
 
       res.status(201).json({ data: user });
     } catch (error) {
@@ -48,15 +59,24 @@ export class UserController {
 
   async updateUser(req: Request, res: Response): Promise<void> {
     try {
-      const { userId } = req.params;
-      const userData = req.body as UpdateUserDto;
+      const userIdParam = req.params["userId"];
+      const userId = Array.isArray(userIdParam) ? userIdParam[0] : userIdParam;
 
       if (userId === undefined || userId === null || userId === "") {
         res.status(400).json({ error: "User ID is required" });
         return;
       }
 
-      const user = await this.userService.updateUser(userId, userData);
+      const parseResult = UpdateUserDtoSchema.safeParse(req.body);
+
+      if (!parseResult.success) {
+        res
+          .status(400)
+          .json({ error: "Invalid user data", details: parseResult.error });
+        return;
+      }
+
+      const user = await this.userService.updateUser(userId, parseResult.data);
 
       if (!user) {
         res.status(404).json({ error: "User not found" });
@@ -72,7 +92,8 @@ export class UserController {
 
   async deleteUser(req: Request, res: Response): Promise<void> {
     try {
-      const { userId } = req.params;
+      const userIdParam = req.params["userId"];
+      const userId = Array.isArray(userIdParam) ? userIdParam[0] : userIdParam;
 
       if (userId === undefined || userId === null || userId === "") {
         res.status(400).json({ error: "User ID is required" });

@@ -740,9 +740,6 @@ importers:
 
   user-handler:
     dependencies:
-      '@monkeytype/schemas':
-        specifier: workspace:*
-        version: link:../packages/schemas
       chalk:
         specifier: 4.1.2
         version: 4.1.2
