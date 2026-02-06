@@ -175,9 +175,9 @@ const routes: Route[] = [
     },
   },
   {
-    path: "/rbh/leaderboard",
+    path: "/rbh/spectator-screen",
     load: async (_params, options) => {
-      await PageController.change("rbhLeaderboard", options);
+      await PageController.change("rbhSpectatorScreen", options);
     },
   },
   {

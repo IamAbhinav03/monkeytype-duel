@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Verstappen",
+    "wpm": 180,
+    "acc": 99,
+    "raw": 185,
+    "consistency": 98,
+    "date": 1700000000000
+  },
+  {
+    "name": "Norris",
+    "wpm": 175,
+    "acc": 98,
+    "raw": 180,
+    "consistency": 97,
+    "date": 1700000000000
+  },
+  {
+    "name": "Leclerc",
+    "wpm": 170,
+    "acc": 99,
+    "raw": 175,
+    "consistency": 96,
+    "date": 1700000000000
+  },
+  {
+    "name": "Hamilton",
+    "wpm": 165,
+    "acc": 97,
+    "raw": 170,
+    "consistency": 99,
+    "date": 1700000000000
+  },
+  {
+    "name": "Piastri",
+    "wpm": 160,
+    "acc": 98,
+    "raw": 165,
+    "consistency": 95,
+    "date": 1700000000000
+  }
+]

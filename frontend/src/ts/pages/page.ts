@@ -16,7 +16,7 @@ export type PageName =
   | "waiting"
   | "rbhProfile"
   | "rbhLoadingScreen"
-  | "rbhLeaderboard"
+  | "rbhSpectatorScreen"
   | "profile"
   | "profileSearch"
   | "404"
