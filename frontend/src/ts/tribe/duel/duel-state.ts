@@ -9,11 +9,9 @@ export type DuelFlowState =
   | "OTP" // Entering OTP
   | "EULA" // Showing competition rules/terms
   | "PRACTICE_1" // First practice (60 sec)
-  | "RESULT_1" // Showing result
-  | "COUNTDOWN_1" // Countdown before practice 2
+  | "RESULT_1" // Showing result + countdown to practice 2
   | "PRACTICE_2" // Second practice (30 sec)
-  | "RESULT_2" // Showing result
-  | "COUNTDOWN_2" // Countdown before lobby
+  | "RESULT_2" // Showing result + countdown to lobby
   | "LOBBY" // Waiting in lobby
   | "RACING" // Active duel
   | "RESULTS"; // Viewing final results
@@ -25,14 +23,12 @@ const ALLOWED_TRANSITIONS: Record<DuelFlowState, DuelFlowState[]> = {
   OTP: ["EULA"],
   EULA: ["PRACTICE_1"],
   PRACTICE_1: ["RESULT_1"],
-  RESULT_1: ["COUNTDOWN_1", "PRACTICE_2"],
-  COUNTDOWN_1: ["PRACTICE_2"],
+  RESULT_1: ["PRACTICE_2"],
   PRACTICE_2: ["RESULT_2"],
-  RESULT_2: ["COUNTDOWN_2", "LOBBY"],
-  COUNTDOWN_2: ["LOBBY"],
+  RESULT_2: ["LOBBY"],
   LOBBY: ["RACING"],
   RACING: ["RESULTS", "LOBBY"],
-  RESULTS: [],
+  RESULTS: ["LOBBY"],
 };
 
 // --- State ---
@@ -261,10 +257,6 @@ export function isPracticing(): boolean {
   return flowState === "PRACTICE_1" || flowState === "PRACTICE_2";
 }
 
-export function isInCountdown(): boolean {
-  return flowState === "COUNTDOWN_1" || flowState === "COUNTDOWN_2";
-}
-
 export function isShowingResult(): boolean {
   return flowState === "RESULT_1" || flowState === "RESULT_2";
 }
@@ -274,15 +266,11 @@ export function isRacing(): boolean {
 }
 
 export function shouldBlockUI(): boolean {
-  // Block UI (retry buttons, etc.) during practice, result viewing, countdowns, and racing
-  // This blocks manual restarts/retries but doesn't prevent the test from being initialized
-  return isPracticing() || isShowingResult() || isInCountdown() || isRacing();
+  return isPracticing() || isShowingResult() || isRacing();
 }
 
 export function shouldBlockRestart(): boolean {
-  // Block restarts during practice, result viewing, countdowns, and racing
-  // But allow the initial test initialization with tribeOverride
-  return isPracticing() || isShowingResult() || isInCountdown() || isRacing();
+  return isPracticing() || isShowingResult() || isRacing();
 }
 
 export function shouldBlockNavigation(): boolean {

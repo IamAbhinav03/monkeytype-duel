@@ -15,6 +15,8 @@ import * as Random from "../../utils/random";
 import TribeSocket from "../tribe-socket";
 import * as TribeSound from "../tribe-sound";
 import * as TribeCarets from "../tribe-carets";
+import * as TribeResults from "../tribe-results";
+import * as TribeChartController from "../tribe-chart-controller";
 import type { DuelSide } from "./duel-state";
 import * as TribeState from "../tribe-state";
 
@@ -178,14 +180,13 @@ async function handleSideSelect(side: DuelSide): Promise<void> {
 async function handleAuthenticate(otp: string): Promise<boolean> {
   console.log(`[DuelFlow] Authenticating with OTP...`);
 
-  if (DuelState.getFlowState() !== "OTP") {
-    console.warn(
-      `[DuelFlow] Ignoring OTP submit outside OTP state (${DuelState.getFlowState()})`,
-    );
+  TribePageOtp.hideError();
+
+  const side = DuelState.getSide();
+  if (!side) {
+    TribePageOtp.showError("No side selected. Please refresh.");
     return false;
   }
-
-  TribePageOtp.hideError();
 
   // If not connected, connect first then authenticate
   if (!TribeSocket.getId()) {
@@ -209,16 +210,7 @@ async function handleAuthenticate(otp: string): Promise<boolean> {
       onConnectedCallback = async (): Promise<void> => {
         clearTimeout(connectTimeout);
 
-        // After connect, register side and then authenticate
-        const side = DuelState.getSide();
-        if (!side) {
-          TribePageOtp.showError("No side selected");
-          TribePageOtp.setLoading(false);
-          settle(false);
-          return;
-        }
-
-        // Register side
+        // Register side (may already be registered — server handles idempotently)
         const registerResult = await registerCurrentSide(side, true);
         if (!registerResult.ok) {
           TribePageOtp.showError(
@@ -244,7 +236,14 @@ async function handleAuthenticate(otp: string): Promise<boolean> {
     return authResult;
   }
 
-  // Already connected, just authenticate
+  // Already connected — ensure side is registered before authenticating
+  // (page-load registration may still be in flight)
+  const registerResult = await registerCurrentSide(side, false);
+  if (!registerResult.ok) {
+    TribePageOtp.showError(registerResult.error ?? "Failed to register side");
+    return false;
+  }
+
   const result = await doAuthenticate(otp);
   if (result) {
     await showEulaPage();
@@ -754,9 +753,9 @@ export function onOpponentLeft(_side: DuelSide): void {
     duration: 3,
   });
 
-  // If we're in lobby or racing, cancel everything and return to lobby
+  // If we're in lobby, racing, or results, cancel everything and return to lobby
   const state = DuelState.getFlowState();
-  if (state === "LOBBY" || state === "RACING") {
+  if (state === "LOBBY" || state === "RACING" || state === "RESULTS") {
     // Cancel all pending race timers (scheduled navigation, countdown, etc.)
     cleanupTransientTimers();
     hideDuelBanner();
@@ -1047,6 +1046,13 @@ export function onDuelRaceComplete(): void {
   DuelState.setFlowState("RESULTS");
   hideDuelBanner();
   TribeCarets.destroyAll();
+
+  // Now that state is RESULTS (shouldBlockUI = false), populate opponent results
+  // and draw charts that were skipped during RACING state
+  TribeResults.update("result");
+  void TribeChartController.drawAllCharts().then(() => {
+    void TribeChartController.updateChartMaxValues();
+  });
 
   // Show auto-advance button below results after a short delay
   setTimeout(() => {
