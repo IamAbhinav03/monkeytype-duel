@@ -187,39 +187,61 @@ async function handleAuthenticate(otp: string): Promise<boolean> {
 
   TribePageOtp.hideError();
 
-  // If not connected, connect first
+  // If not connected, connect first then authenticate
   if (!TribeSocket.getId()) {
     TribePageOtp.setLoading(true);
 
-    onConnectedCallback = async (): Promise<void> => {
-      // After connect, register side and then authenticate
-      const side = DuelState.getSide();
-      if (!side) {
-        TribePageOtp.showError("No side selected");
+    const authResult = await new Promise<boolean>((resolve) => {
+      let settled = false;
+      const settle = (value: boolean): void => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+
+      const connectTimeout = setTimeout(() => {
+        onConnectedCallback = undefined;
+        TribePageOtp.showError("Connection timed out. Please try again.");
         TribePageOtp.setLoading(false);
-        return;
-      }
+        settle(false);
+      }, 10_000);
 
-      // Register side
-      const registerResult = await registerCurrentSide(side, true);
-      if (!registerResult.ok) {
-        TribePageOtp.showError(
-          registerResult.error ?? "Failed to register side",
-        );
+      onConnectedCallback = async (): Promise<void> => {
+        clearTimeout(connectTimeout);
+
+        // After connect, register side and then authenticate
+        const side = DuelState.getSide();
+        if (!side) {
+          TribePageOtp.showError("No side selected");
+          TribePageOtp.setLoading(false);
+          settle(false);
+          return;
+        }
+
+        // Register side
+        const registerResult = await registerCurrentSide(side, true);
+        if (!registerResult.ok) {
+          TribePageOtp.showError(
+            registerResult.error ?? "Failed to register side",
+          );
+          TribePageOtp.setLoading(false);
+          settle(false);
+          return;
+        }
+
+        // Now authenticate
+        const result = await doAuthenticate(otp);
         TribePageOtp.setLoading(false);
-        return;
-      }
+        if (result) {
+          await showEulaPage();
+        }
+        settle(result);
+      };
 
-      // Now authenticate
-      const result = await doAuthenticate(otp);
-      TribePageOtp.setLoading(false);
-      if (result) {
-        await showEulaPage();
-      }
-    };
+      TribeSocket.connect();
+    });
 
-    TribeSocket.connect();
-    return false; // Will continue in callback
+    return authResult;
   }
 
   // Already connected, just authenticate
