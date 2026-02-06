@@ -5,6 +5,7 @@ import logger from "./utils/logger.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error-handler.js";
 import { getHealth } from "./controllers/health.controller.js";
 import { UserController } from "./controllers/user.controller.js";
+import { EventUserController } from "./controllers/event-user.controller.js";
 import { VERSION } from "./version.js";
 
 export function createApp(): Application {
@@ -23,6 +24,7 @@ export function createApp(): Application {
 
   // Initialize controllers
   const userController = new UserController();
+  const eventUserController = new EventUserController();
 
   // Routes
   app.get("/", (req, res) => {
@@ -42,6 +44,28 @@ export function createApp(): Application {
   app.delete(
     "/api/users/:userId",
     userController.deleteUser.bind(userController),
+  );
+
+  // Event user routes (specific routes before parameterized routes)
+  app.post(
+    "/api/event-users/bulk",
+    eventUserController.bulkAddUsers.bind(eventUserController),
+  );
+  app.get(
+    "/api/event-users",
+    eventUserController.getAllUsers.bind(eventUserController),
+  );
+  app.get(
+    "/api/event-users/:otp",
+    eventUserController.getUser.bind(eventUserController),
+  );
+  app.post(
+    "/api/event-users/:otp",
+    eventUserController.addUser.bind(eventUserController),
+  );
+  app.delete(
+    "/api/event-users/:otp",
+    eventUserController.deleteUser.bind(eventUserController),
   );
 
   // Error handling

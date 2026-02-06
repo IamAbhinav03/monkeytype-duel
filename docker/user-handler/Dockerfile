@@ -5,11 +5,16 @@ RUN npm install -g pnpm@9.6.0
 
 WORKDIR /app/user-handler
 
-# Copy all files
-COPY user-handler ./
+# Copy package files first
+COPY user-handler/package.json ./
 
-# Install dependencies
+# Install all dependencies (including devDependencies for build)
 RUN pnpm install --no-frozen-lockfile
+
+# Copy source code
+COPY user-handler/src ./src
+COPY user-handler/tsconfig.json ./
+COPY user-handler/.oxlintrc.json ./
 
 # Build the application
 RUN pnpm build
@@ -30,8 +35,8 @@ RUN pnpm install --no-frozen-lockfile --prod --ignore-scripts
 # Copy built files from base stage
 COPY --from=base /app/user-handler/dist ./dist
 
-# Create logs directory
-RUN mkdir -p logs
+# Create logs and data directories
+RUN mkdir -p logs data
 
 EXPOSE 3006
 
