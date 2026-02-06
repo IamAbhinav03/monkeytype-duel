@@ -48,12 +48,179 @@ const DISCONNECT_GRACE_MS = 10_000; // 10 seconds
 
 // Pending duel race start timeout (cleared on disconnect to prevent 1-player races)
 let duelStartTimeout: ReturnType<typeof setTimeout> | undefined;
+type OtpAttemptState = {
+  attempts: number;
+  windowStart: number;
+  blockedUntil: number;
+};
+const otpAttemptsBySide: Map<DuelSide, OtpAttemptState> = new Map();
+const OTP_ATTEMPT_WINDOW_MS = 60_000;
+const OTP_MAX_ATTEMPTS_PER_WINDOW = 8;
+const OTP_BLOCK_MS = 120_000;
 
 function clearGracePeriodForSocket(socketId: string): void {
   const timer = disconnectGracePeriods.get(socketId);
   if (!timer) return;
   clearTimeout(timer);
   disconnectGracePeriods.delete(socketId);
+}
+
+function clearPendingDuelStart(reason?: string): void {
+  if (!duelStartTimeout) return;
+  clearTimeout(duelStartTimeout);
+  duelStartTimeout = undefined;
+  if (reason) {
+    Logger.info(`Cleared pending duel race start ${reason}`);
+  }
+}
+
+function clearOtpRateLimit(side: DuelSide): void {
+  otpAttemptsBySide.delete(side);
+}
+
+function getOtpBlockRemainingMs(side: DuelSide, now: number): number {
+  const state = otpAttemptsBySide.get(side);
+  if (!state) return 0;
+  if (state.blockedUntil <= now) return 0;
+  return state.blockedUntil - now;
+}
+
+function getOtpAttemptState(side: DuelSide, now: number): OtpAttemptState {
+  const existing = otpAttemptsBySide.get(side);
+  if (!existing) {
+    const initial: OtpAttemptState = {
+      attempts: 0,
+      windowStart: now,
+      blockedUntil: 0,
+    };
+    otpAttemptsBySide.set(side, initial);
+    return initial;
+  }
+
+  if (
+    existing.blockedUntil <= now &&
+    now - existing.windowStart >= OTP_ATTEMPT_WINDOW_MS
+  ) {
+    existing.attempts = 0;
+    existing.windowStart = now;
+    existing.blockedUntil = 0;
+  }
+
+  return existing;
+}
+
+function recordOtpFailure(side: DuelSide, now: number): number {
+  const state = getOtpAttemptState(side, now);
+
+  if (state.blockedUntil > now) {
+    return state.blockedUntil - now;
+  }
+
+  state.attempts += 1;
+
+  if (state.attempts >= OTP_MAX_ATTEMPTS_PER_WINDOW) {
+    state.blockedUntil = now + OTP_BLOCK_MS;
+    state.windowStart = now;
+    state.attempts = 0;
+    return OTP_BLOCK_MS;
+  }
+
+  otpAttemptsBySide.set(side, state);
+  return 0;
+}
+
+function hasValidDuelPairInRoom(room: Room): boolean {
+  const left = duelStore.getParticipant("L");
+  const right = duelStore.getParticipant("R");
+
+  if (!left || !right) return false;
+  if (!left.isAuthenticated || !right.isAuthenticated) return false;
+  if (left.practiceCount < DUEL_CONFIG.PRACTICE_COUNT) return false;
+  if (right.practiceCount < DUEL_CONFIG.PRACTICE_COUNT) return false;
+
+  if (!room.users[left.socketId] || !room.users[right.socketId]) return false;
+
+  return Object.keys(room.users).length === 2;
+}
+
+function scheduleDuelRace(io: TribesServer, room: Room): boolean {
+  if (room.type !== "duel") return false;
+  if (room.state !== "LOBBY") return false;
+  if (!hasValidDuelPairInRoom(room)) return false;
+  if (duelStartTimeout) return false;
+
+  const startAt = Date.now() + DUEL_CONFIG.START_DELAY_MS;
+  const seed = Math.floor(Math.random() * 1000000);
+
+  Logger.info(
+    `Scheduling duel race in room ${room.id} at ${startAt} (in ${DUEL_CONFIG.START_DELAY_MS}ms), seed: ${seed}`,
+  );
+
+  // Clear stale WPM from previous race
+  duelStore.clearLiveWpm();
+
+  // Initialize the room for race: set seed, reset user states, transition to RACE_ONGOING
+  room.seed = seed;
+  room.duelResultRecorded = false;
+  room.maxRaw = 0;
+  room.maxWpm = 0;
+  room.minRaw = Infinity;
+  room.minWpm = Infinity;
+  room.startAt = startAt;
+
+  Object.values(room.users).forEach((user) => {
+    user.isReady = false;
+    user.isFinished = false;
+    user.isTyping = true;
+    user.result = undefined;
+    user.progress = undefined;
+  });
+
+  // Emit to all players in the room (including the joiner)
+  io.to(room.id).emit("duel_race_scheduled", {
+    startAt,
+    seed,
+    raceDuration: DUEL_CONFIG.RACE_DURATION_SECONDS,
+  });
+
+  // Transition to RACE_ONGOING after the start delay so progress broadcasts work
+  const duelRoomId = room.id;
+  duelStartTimeout = setTimeout(() => {
+    duelStartTimeout = undefined;
+    const liveRoom = roomStore.getRoom(duelRoomId);
+
+    if (liveRoom?.type !== "duel") {
+      Logger.warning(`Duel race aborted — room ${duelRoomId} no longer exists`);
+      return;
+    }
+
+    if (liveRoom.state === "LOBBY" && hasValidDuelPairInRoom(liveRoom)) {
+      liveRoom.state = "RACE_ONGOING";
+      io.to(duelRoomId).emit("room_state_changed", {
+        state: "RACE_ONGOING",
+      });
+
+      // Start progress broadcast interval for duel room
+      const PROGRESS_UPDATE_INTERVAL = 100;
+      timerService.start(duelRoomId, TimerType.PROGRESS, {
+        duration: Infinity,
+        interval: PROGRESS_UPDATE_INTERVAL,
+        onTick: () => {
+          broadcastDuelProgress(io, liveRoom);
+        },
+        onComplete: (): void => {
+          // Progress updates run until manually stopped
+        },
+      });
+    } else {
+      liveRoom.startAt = undefined;
+      Logger.warning(
+        `Duel race aborted — invalid room state (${liveRoom.state}) or participants for ${duelRoomId}`,
+      );
+    }
+  }, DUEL_CONFIG.START_DELAY_MS);
+
+  return true;
 }
 
 function buildJoinLobbyResponse(room: Room): DuelAckResponse {
@@ -241,9 +408,10 @@ export function authenticate(
     };
   }
 
+  const normalizedOtp = otp.trim();
   const participant = duelStore.getParticipantBySocket(socket.id);
   if (participant?.isAuthenticated) {
-    if (participant.userId === otp) {
+    if (participant.userId === normalizedOtp) {
       return {
         ok: true,
         data: {
@@ -261,12 +429,29 @@ export function authenticate(
     };
   }
 
-  const validation = validateOtp(otp);
+  const now = Date.now();
+  const blockRemainingMs = getOtpBlockRemainingMs(side, now);
+  if (blockRemainingMs > 0) {
+    return {
+      ok: false,
+      error: `Too many OTP attempts. Try again in ${Math.ceil(blockRemainingMs / 1000)}s.`,
+    };
+  }
+
+  const validation = validateOtp(normalizedOtp);
   if (!validation.valid || !validation.username) {
+    const blockedForMs = recordOtpFailure(side, now);
+    if (blockedForMs > 0) {
+      return {
+        ok: false,
+        error: `Too many OTP attempts. Try again in ${Math.ceil(blockedForMs / 1000)}s.`,
+      };
+    }
     return { ok: false, error: "Invalid OTP" };
   }
 
-  duelStore.authenticate(socket.id, otp, validation.username);
+  duelStore.authenticate(socket.id, normalizedOtp, validation.username);
+  clearOtpRateLimit(side);
 
   // Update socket name for room display
   socket.data.name = validation.username;
@@ -277,7 +462,7 @@ export function authenticate(
   return {
     ok: true,
     data: {
-      userId: otp,
+      userId: normalizedOtp,
       username: validation.username,
       side,
     },
@@ -365,6 +550,7 @@ export function joinLobby(
     const socketRoom = roomStore.getRoom(socketRoomId);
     if (socketRoom && socketRoom.type === "duel") {
       socket.data.roomId = socketRoom.id;
+      scheduleDuelRace(io, socketRoom);
       return buildJoinLobbyResponse(socketRoom);
     }
   }
@@ -414,7 +600,12 @@ export function joinLobby(
 
     if (existingRoom.users[socket.id]) {
       socket.data.roomId = existingRoom.id;
+      scheduleDuelRace(io, existingRoom);
       return buildJoinLobbyResponse(existingRoom);
+    }
+
+    if (existingRoom.size >= 2) {
+      return { ok: false, error: "Duel room is full" };
     }
 
     const result = roomStore.addUserToRoom(
@@ -451,72 +642,14 @@ export function joinLobby(
       return buildJoinLobbyResponse(result.room);
     }
 
-    // Both players are now in the room - auto-start the duel!
-    // Schedule race to start after countdown delay
-    const startAt = Date.now() + DUEL_CONFIG.START_DELAY_MS;
-    const seed = Math.floor(Math.random() * 1000000);
+    if (!hasValidDuelPairInRoom(existingRoom)) {
+      Logger.warning(
+        `Duel race not scheduled for room ${roomId} due to invalid side mapping`,
+      );
+      return buildJoinLobbyResponse(result.room);
+    }
 
-    Logger.info(
-      `Scheduling duel race at ${startAt} (in ${DUEL_CONFIG.START_DELAY_MS}ms), seed: ${seed}`,
-    );
-
-    // Clear stale WPM from previous race
-    duelStore.clearLiveWpm();
-
-    // Emit to all players in the room (including the joiner)
-    io.to(roomId).emit("duel_race_scheduled", {
-      startAt,
-      seed,
-      raceDuration: DUEL_CONFIG.RACE_DURATION_SECONDS,
-    });
-
-    // Initialize the room for race: set seed, reset user states, transition to RACE_ONGOING
-    existingRoom.seed = seed;
-    existingRoom.maxRaw = 0;
-    existingRoom.maxWpm = 0;
-    existingRoom.minRaw = Infinity;
-    existingRoom.minWpm = Infinity;
-    existingRoom.startAt = startAt;
-
-    Object.values(existingRoom.users).forEach((user) => {
-      user.isReady = false;
-      user.isFinished = false;
-      user.isTyping = true;
-      user.result = undefined;
-      user.progress = undefined;
-    });
-
-    // Transition to RACE_ONGOING after the start delay so progress broadcasts work
-    const duelRoomId = roomId; // Capture for closure (guaranteed non-null in else branch)
-    duelStartTimeout = setTimeout(() => {
-      duelStartTimeout = undefined;
-      if (
-        existingRoom.state === "LOBBY" &&
-        Object.keys(existingRoom.users).length >= 2
-      ) {
-        existingRoom.state = "RACE_ONGOING";
-        io.to(duelRoomId).emit("room_state_changed", {
-          state: "RACE_ONGOING",
-        });
-
-        // Start progress broadcast interval for duel room
-        const PROGRESS_UPDATE_INTERVAL = 100;
-        timerService.start(duelRoomId, TimerType.PROGRESS, {
-          duration: Infinity,
-          interval: PROGRESS_UPDATE_INTERVAL,
-          onTick: () => {
-            broadcastDuelProgress(io, existingRoom);
-          },
-          onComplete: (): void => {
-            // Progress updates run until manually stopped
-          },
-        });
-      } else {
-        Logger.warning(
-          `Duel race aborted — ${Object.keys(existingRoom.users).length} users in room`,
-        );
-      }
-    }, DUEL_CONFIG.START_DELAY_MS);
+    scheduleDuelRace(io, existingRoom);
 
     return buildJoinLobbyResponse(result.room);
   }
@@ -540,14 +673,14 @@ export function handleDisconnect(io: TribesServer, socket: TribesSocket): void {
   );
 
   // Cancel any pending race start — prevents 1-player race after disconnect
-  if (duelStartTimeout) {
-    clearTimeout(duelStartTimeout);
-    duelStartTimeout = undefined;
-    Logger.info(`Cleared pending duel race start due to disconnect`);
-  }
+  clearPendingDuelStart("due to disconnect");
 
   // Notify opponent of temporary disconnect
   const roomId = duelStore.getActiveRoom();
+  const room = roomId ? roomStore.getRoom(roomId) : undefined;
+  if (room?.type === "duel" && room.state === "LOBBY") {
+    room.startAt = undefined;
+  }
   if (roomId) {
     socket.to(roomId).emit("duel_opponent_left", { side });
   }
@@ -563,6 +696,7 @@ export function handleDisconnect(io: TribesServer, socket: TribesSocket): void {
 
     const releasedSide = duelStore.releaseSide(socket.id);
     if (!releasedSide) return;
+    clearOtpRateLimit(releasedSide);
 
     // Clean up room
     if (roomId) {
@@ -604,6 +738,8 @@ export function resetSession(
     return { ok: false, error: "Not registered to a side" };
   }
 
+  clearPendingDuelStart("due to session reset");
+
   const success = duelStore.deauthenticate(socket.id);
   if (!success) {
     return { ok: false, error: "Failed to reset session" };
@@ -611,6 +747,10 @@ export function resetSession(
 
   socket.data.name = "Guest";
   const roomId = roomStore.getRoomIdBySocketId(socket.id);
+  const room = roomId ? roomStore.getRoom(roomId) : undefined;
+  if (room?.type === "duel" && room.state === "LOBBY") {
+    room.startAt = undefined;
+  }
   if (roomId) {
     const result = roomStore.removeUserFromRoom(socket.id);
 

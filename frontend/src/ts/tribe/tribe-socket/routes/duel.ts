@@ -18,62 +18,89 @@ export type TimeSyncResponse = {
   serverTime: number;
 };
 
+const DUEL_ACK_TIMEOUT_MS = 5000;
+const ACK_TIMEOUT_ERROR = "Request timed out. Check connection and retry.";
+
+async function emitWithAck<T>(
+  event: string,
+  fallbackResponse: T,
+  data?: unknown,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const ackPromise = new Promise<T>((resolve) => {
+    const ack = (response: T): void => {
+      resolve(response);
+    };
+
+    if (data === undefined) {
+      Socket.emit(event as never, ack as never);
+    } else {
+      Socket.emit(event as never, data as never, ack as never);
+    }
+  });
+
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => {
+      console.warn(
+        `[DuelSocket] ${event} ACK timeout after ${DUEL_ACK_TIMEOUT_MS}ms`,
+      );
+      resolve(fallbackResponse);
+    }, DUEL_ACK_TIMEOUT_MS);
+  });
+
+  const response = await Promise.race([ackPromise, timeoutPromise]);
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
+  return response;
+}
+
 // --- OUT (Client -> Server) ---
 
 async function registerSystem(side: DuelSide): Promise<DuelAckResponse> {
-  return new Promise((resolve) => {
-    Socket.emit(
-      "duel_register_system",
-      { side },
-      (response: DuelAckResponse) => {
-        resolve(response);
-      },
-    );
-  });
+  return emitWithAck<DuelAckResponse>(
+    "duel_register_system",
+    { ok: false, error: ACK_TIMEOUT_ERROR },
+    { side },
+  );
 }
 
 async function authenticate(otp: string): Promise<DuelAckResponse> {
-  return new Promise((resolve) => {
-    Socket.emit("duel_authenticate", { otp }, (response: DuelAckResponse) => {
-      resolve(response);
-    });
-  });
+  return emitWithAck<DuelAckResponse>(
+    "duel_authenticate",
+    { ok: false, error: ACK_TIMEOUT_ERROR },
+    { otp },
+  );
 }
 
 async function practiceComplete(): Promise<DuelAckResponse> {
-  return new Promise((resolve) => {
-    Socket.emit("duel_practice_complete", (response: DuelAckResponse) => {
-      resolve(response);
-    });
+  return emitWithAck<DuelAckResponse>("duel_practice_complete", {
+    ok: false,
+    error: ACK_TIMEOUT_ERROR,
   });
 }
 
 async function joinLobby(): Promise<DuelAckResponse> {
-  return new Promise((resolve) => {
-    Socket.emit("duel_join_lobby", (response: DuelAckResponse) => {
-      resolve(response);
-    });
+  return emitWithAck<DuelAckResponse>("duel_join_lobby", {
+    ok: false,
+    error: ACK_TIMEOUT_ERROR,
   });
 }
 
 async function resetSession(): Promise<DuelAckResponse> {
-  return new Promise((resolve) => {
-    Socket.emit("duel_reset_session", (response: DuelAckResponse) => {
-      resolve(response);
-    });
+  return emitWithAck<DuelAckResponse>("duel_reset_session", {
+    ok: false,
+    error: ACK_TIMEOUT_ERROR,
   });
 }
 
 async function timeSync(clientTime: number): Promise<TimeSyncResponse> {
-  return new Promise((resolve) => {
-    Socket.emit(
-      "duel_time_sync",
-      { clientTime },
-      (response: TimeSyncResponse) => {
-        resolve(response);
-      },
-    );
-  });
+  return emitWithAck<TimeSyncResponse>(
+    "duel_time_sync",
+    { clientTime, serverTime: Date.now() },
+    { clientTime },
+  );
 }
 
 // --- IN (Server -> Client) ---

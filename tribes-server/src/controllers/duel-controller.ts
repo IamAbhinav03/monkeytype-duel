@@ -1,6 +1,12 @@
 // Duel socket event handlers
 import type { Server, Socket } from "socket.io";
 import * as duelService from "../services/duel-service.js";
+import {
+  DUEL_SPECTATORS_ROOM,
+  emitDuelLeaderboardSnapshot,
+  emitDuelSpectatorState,
+  getDuelSpectatorSnapshot,
+} from "../services/duel-spectator-service.js";
 import { DUEL_CONFIG } from "../config.js";
 import Logger from "../utils/logger.js";
 import type {
@@ -84,6 +90,23 @@ export function registerDuelHandlers(
       clientTime: data.clientTime,
       serverTime: Date.now(),
     });
+  });
+
+  // ============================================================
+  // Spectator subscription (socket push feed)
+  // ============================================================
+  socket.on("duel_spectator_subscribe", (callback) => {
+    void socket.join(DUEL_SPECTATORS_ROOM);
+    callback({
+      ok: true,
+      ...getDuelSpectatorSnapshot(io),
+    });
+    emitDuelSpectatorState(io, true);
+    emitDuelLeaderboardSnapshot(io, true);
+  });
+
+  socket.on("duel_spectator_unsubscribe", () => {
+    void socket.leave(DUEL_SPECTATORS_ROOM);
   });
 
   // ============================================================

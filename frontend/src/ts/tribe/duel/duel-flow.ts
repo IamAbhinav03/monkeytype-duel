@@ -1331,7 +1331,11 @@ async function registerCurrentSide(
   }
 
   if (performTimeSync) {
-    await DuelTimeSync.sync();
+    try {
+      await DuelTimeSync.sync();
+    } catch (error) {
+      console.warn("[DuelFlow] Time sync failed, using local clock:", error);
+    }
   }
 
   return result;

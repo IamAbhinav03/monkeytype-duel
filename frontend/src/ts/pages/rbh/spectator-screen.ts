@@ -2,6 +2,7 @@ import Page from "../../pages/page";
 import { qs, ElementWithUtils, createElementWithUtils } from "../../utils/dom";
 import { addToGlobal } from "../../utils/misc";
 import { getTribesServerUrl } from "../../utils/tribe";
+import { io, type Socket } from "socket.io-client";
 
 // ============ TYPES ============
 
@@ -50,6 +51,12 @@ type DuelSpectatorPayload = {
   };
 };
 
+type DuelSpectatorSubscribeResponse = {
+  ok: boolean;
+  state: DuelSpectatorPayload;
+  leaderboard: unknown;
+};
+
 type ViewType = "leaderboard" | "duel";
 
 // ============ CONFIGURATION ============
@@ -57,6 +64,7 @@ const DUEL_LEADERBOARD_ENDPOINT = "/duel/leaderboard";
 const DUEL_SPECTATOR_ENDPOINT = "/duel/spectator";
 const LEADERBOARD_POLL_INTERVAL_MS = 1000;
 const DUEL_STATE_POLL_INTERVAL_MS = 250;
+const SPECTATOR_SUBSCRIBE_TIMEOUT_MS = 4000;
 const DUEL_CLOCK_TICK_MS = 100;
 const FALLBACK_DATA_PATH = "/data/dummy-participants.json";
 const DEFAULT_LEFT_NAME = "System Left";
@@ -79,6 +87,8 @@ let duelClockInterval: ReturnType<typeof setInterval> | undefined;
 let duelClockStartAt: number | null = null;
 let duelClockDuration = 30;
 let duelServerOffset = 0;
+let spectatorSocket: Socket | null = null;
+let spectatorSubscribeTimeout: ReturnType<typeof setTimeout> | undefined;
 
 // Duel state
 const duelState: DuelState = {
@@ -90,6 +100,7 @@ const duelState: DuelState = {
 
 // DOM cache
 let pageElement: ElementWithUtils | null = null;
+let placeholderSummaryEl: ElementWithUtils | null = null;
 
 // ============ HELPERS ============
 
@@ -196,25 +207,92 @@ function isSameEntry(a: LeaderboardEntry, b: LeaderboardEntry): boolean {
   );
 }
 
+function splitLeaderboardEntries(sortedEntries: LeaderboardEntry[]): {
+  activeEntries: LeaderboardEntry[];
+  placeholderCount: number;
+} {
+  const activeEntries: LeaderboardEntry[] = [];
+  let placeholderCount = 0;
+
+  for (const entry of sortedEntries) {
+    if (entry.wpm === -1) {
+      placeholderCount++;
+      continue;
+    }
+    activeEntries.push(entry);
+  }
+
+  return { activeEntries, placeholderCount };
+}
+
 function reconcileLeaderboard(nextEntries: LeaderboardEntry[]): void {
-  const sortedNext = [...nextEntries].sort((a, b) => b.wpm - a.wpm);
+  const container = getContainer();
+  if (container === null) return;
 
-  const nextIdSet = new Set(sortedNext.map((entry) => entry.id));
-  const sameShape =
-    entries.length === sortedNext.length &&
-    entries.every((entry) => nextIdSet.has(entry.id));
+  const sortedNext = [...nextEntries].sort(leaderboardSort);
+  const { activeEntries, placeholderCount } =
+    splitLeaderboardEntries(sortedNext);
 
-  if (!sameShape || (entries.length === 0 && sortedNext.length === 0)) {
+  // Fast path: if we have no cached state at all, do a full init
+  if (rowNodeMap.size === 0 && entryCache.size === 0) {
     init(sortedNext);
     return;
   }
 
-  for (const nextEntry of sortedNext) {
-    const existing = entries.find((entry) => entry.id === nextEntry.id);
-    if (!existing || !isSameEntry(existing, nextEntry)) {
-      update(nextEntry);
+  const nextIdSet = new Set<string>();
+  for (const entry of activeEntries) {
+    nextIdSet.add(entry.id);
+  }
+
+  // --- Remove stale entries (present in old set but not in new set) ---
+  const staleIds: string[] = [];
+  for (const [id, row] of rowNodeMap) {
+    if (!nextIdSet.has(id)) {
+      staleIds.push(id);
+      row.remove();
     }
   }
+  for (const id of staleIds) {
+    rowNodeMap.delete(id);
+    entryCache.delete(id);
+  }
+
+  // --- Add new entries & patch changed entries ---
+  for (let i = 0; i < activeEntries.length; i++) {
+    const entry = activeEntries[i];
+    if (!entry) continue;
+    let row = rowNodeMap.get(entry.id);
+
+    if (row === undefined) {
+      // Brand new entry: create DOM node
+      row = createRow(entry, i + 1);
+      container.append(row);
+      rowNodeMap.set(entry.id, row);
+      entryCache.set(entry.id, { ...entry });
+    } else {
+      // Existing entry: patch only changed cells
+      const cached = entryCache.get(entry.id);
+      if (!cached || !isSameEntry(cached, entry)) {
+        updateRowContent(row, entry, i + 1);
+        entryCache.set(entry.id, { ...entry });
+      } else {
+        // Data identical -- but rank might have shifted
+        const rankEl = row.native.children[0];
+        const rankStr = String(i + 1);
+        if (rankEl && rankEl.textContent !== rankStr) {
+          rankEl.textContent = rankStr;
+        }
+        applyTierClass(row, i + 1, false);
+      }
+    }
+  }
+
+  // Update the authoritative entries array
+  entries = sortedNext;
+  updatePlaceholderSummary(container, placeholderCount);
+
+  // Reorder DOM to match new sort order (with bounded FLIP animations)
+  reorderAndAnimate(container, activeEntries);
 }
 
 async function fetchLeaderboardFromServer(): Promise<
@@ -481,6 +559,111 @@ function stopDuelStatePolling(): void {
   }
 }
 
+function startFallbackPolling(): void {
+  startDuelStatePolling();
+  startLeaderboardPolling();
+}
+
+function stopFallbackPolling(): void {
+  stopDuelStatePolling();
+  stopLeaderboardPolling();
+}
+
+function clearSpectatorSubscribeTimeout(): void {
+  if (!spectatorSubscribeTimeout) return;
+  clearTimeout(spectatorSubscribeTimeout);
+  spectatorSubscribeTimeout = undefined;
+}
+
+function onSpectatorStatePushed(payload: unknown): void {
+  const parsed = parseDuelSpectatorPayload(payload);
+  if (!parsed) return;
+  applyDuelSpectatorState(parsed);
+}
+
+function onLeaderboardPushed(payload: unknown): void {
+  const parsed = parseLeaderboardPayload(payload);
+  reconcileLeaderboard(parsed);
+}
+
+function subscribeSpectatorFeed(): void {
+  if (!spectatorSocket || !spectatorSocket.connected) return;
+
+  clearSpectatorSubscribeTimeout();
+  spectatorSubscribeTimeout = setTimeout(() => {
+    startFallbackPolling();
+    console.warn(
+      `[SpectatorScreen] duel_spectator_subscribe timeout (${SPECTATOR_SUBSCRIBE_TIMEOUT_MS}ms), using HTTP fallback`,
+    );
+  }, SPECTATOR_SUBSCRIBE_TIMEOUT_MS);
+
+  spectatorSocket.emit(
+    "duel_spectator_subscribe",
+    (response: DuelSpectatorSubscribeResponse) => {
+      clearSpectatorSubscribeTimeout();
+
+      if (!response.ok) {
+        startFallbackPolling();
+        return;
+      }
+
+      stopFallbackPolling();
+      const parsedState = parseDuelSpectatorPayload(response.state);
+      if (parsedState) {
+        applyDuelSpectatorState(parsedState);
+      }
+      onLeaderboardPushed(response.leaderboard);
+    },
+  );
+}
+
+function setupSpectatorPush(): void {
+  teardownSpectatorPush();
+
+  spectatorSocket = io(getTribesServerUrl(), {
+    autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    query: {
+      name: "Spectator",
+    },
+  });
+
+  spectatorSocket.on("connect", () => {
+    subscribeSpectatorFeed();
+  });
+
+  spectatorSocket.on("duel_spectator_state", (payload: unknown) => {
+    onSpectatorStatePushed(payload);
+  });
+
+  spectatorSocket.on("duel_leaderboard_snapshot", (payload: unknown) => {
+    onLeaderboardPushed(payload);
+  });
+
+  spectatorSocket.on("disconnect", () => {
+    startFallbackPolling();
+  });
+
+  spectatorSocket.on("connect_error", (error: Error) => {
+    startFallbackPolling();
+    console.warn("[SpectatorScreen] Spectator socket connect error:", error);
+  });
+}
+
+function teardownSpectatorPush(): void {
+  clearSpectatorSubscribeTimeout();
+
+  if (!spectatorSocket) return;
+
+  if (spectatorSocket.connected) {
+    spectatorSocket.emit("duel_spectator_unsubscribe");
+  }
+  spectatorSocket.removeAllListeners();
+  spectatorSocket.disconnect();
+  spectatorSocket = null;
+}
+
 // ============ VIEW SWITCHING ============
 
 const TRANSITION_DURATION = 600; // ms
@@ -562,32 +745,88 @@ export function getCurrentView(): ViewType {
 
 // ============ LEADERBOARD FUNCTIONS ============
 
+// --- Optimization caches ---
+// Maps entry.id -> the live DOM node for that row (avoids re-querying)
+const rowNodeMap = new Map<string, ElementWithUtils>();
+// Maps entry.id -> the last-rendered data snapshot (avoids redundant DOM writes)
+const entryCache = new Map<string, LeaderboardEntry>();
+// Cached container reference (avoids re-querying #leaderboardBody every tick)
+let cachedContainer: ElementWithUtils | null = null;
+
+// FLIP animation threshold: only animate position changes for the top N rows.
+// Rows beyond this index skip getBoundingClientRect entirely.
+const FLIP_ANIMATION_LIMIT = 20;
+
+function getContainer(): ElementWithUtils | null {
+  cachedContainer ??= qs("#leaderboardBody");
+  return cachedContainer;
+}
+
+function clearCaches(): void {
+  rowNodeMap.clear();
+  entryCache.clear();
+  placeholderSummaryEl = null;
+}
+
+// --- Formatting helpers (pure, no DOM) ---
+
+function formatStat(
+  val: number,
+  isPlaceholder: boolean,
+  isPct: boolean = false,
+): string {
+  if (isPlaceholder) return "-";
+  return isPct ? Math.floor(val) + "%" : String(Math.round(val));
+}
+
+function formatFloat(
+  val: number,
+  isPlaceholder: boolean,
+  isPct: boolean = false,
+): string {
+  if (isPlaceholder) return "-";
+  return isPct ? val.toFixed(2) + "%" : val.toFixed(2);
+}
+
+function formatDate(date: number, isPlaceholder: boolean): string {
+  if (isPlaceholder || date <= 0) return "-";
+  return new Date(date).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+const TIER_CLASSES = [
+  "tier-podium",
+  "tier-contender",
+  "tier-field",
+  "tier-placeholder",
+];
+
+function setTextIfChanged(target: Element | null, value: string): void {
+  if (target && target.textContent !== value) {
+    target.textContent = value;
+  }
+}
+
+function applyTierClass(
+  row: ElementWithUtils,
+  rank: number,
+  isPlaceholder: boolean,
+): void {
+  row.removeClass(TIER_CLASSES);
+  row.addClass(getTierClass(rank, isPlaceholder));
+}
+
+// --- Row creation (only used for genuinely new entries) ---
+
 function createRow(entry: LeaderboardEntry, rank: number): ElementWithUtils {
+  const isPlaceholder = entry.wpm === -1;
   const row = createElementWithUtils("div", {
-    classList: ["leaderboardRow"],
+    classList: ["leaderboardRow", getTierClass(rank, isPlaceholder)],
     dataset: { key: entry.id, name: entry.name },
   });
-
-  const isPlaceholder = entry.wpm === -1;
-
-  const formatStat = (val: number, isPct: boolean = false): string | number => {
-    if (isPlaceholder) return "-";
-    return isPct ? Math.floor(val) + "%" : Math.round(val);
-  };
-
-  const formatFloat = (val: number, isPct: boolean = false): string => {
-    if (isPlaceholder) return "-";
-    return isPct ? val.toFixed(2) + "%" : val.toFixed(2);
-  };
-
-  const dateStr =
-    !isPlaceholder && entry.date > 0
-      ? new Date(entry.date).toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        })
-      : "-";
 
   row.setHtml(`
         <div class="col rank">${rank}</div>
@@ -597,90 +836,336 @@ function createRow(entry: LeaderboardEntry, rank: number): ElementWithUtils {
                  <div class="name">${entry.name}</div>
             </div>
         </div>
-        <div class="col stat narrow">${formatStat(entry.wpm)}</div>
-        <div class="col stat narrow">${formatStat(entry.raw)}</div>
-        <div class="col stat wide">${formatFloat(entry.wpm)}</div>
-        <div class="col stat wide">${formatFloat(entry.acc, true)}</div>
-        <div class="col stat wide">${formatFloat(entry.raw)}</div>
-        <div class="col stat wide">${formatFloat(entry.consistency, true)}</div>
-        <div class="col date">${dateStr}</div>
+        <div class="col stat narrow">${formatStat(entry.wpm, isPlaceholder)}</div>
+        <div class="col stat narrow">${formatStat(entry.raw, isPlaceholder)}</div>
+        <div class="col stat wide">${formatFloat(entry.wpm, isPlaceholder)}</div>
+        <div class="col stat wide">${formatFloat(entry.acc, isPlaceholder, true)}</div>
+        <div class="col stat wide">${formatFloat(entry.raw, isPlaceholder)}</div>
+        <div class="col stat wide">${formatFloat(entry.consistency, isPlaceholder, true)}</div>
+        <div class="col date">${formatDate(entry.date, isPlaceholder)}</div>
     `);
 
   return row;
 }
 
-export function init(initialData: LeaderboardEntry[]): void {
-  entries = [...initialData].sort((a, b) => b.wpm - a.wpm);
-  const container = qs("#leaderboardBody");
-  if (container === null) return;
+// --- In-place cell patching (avoids destroying/recreating the row) ---
 
-  container.empty();
-  entries.forEach((e, i) => {
-    container.append(createRow(e, i + 1));
+function updateRowContent(
+  row: ElementWithUtils,
+  entry: LeaderboardEntry,
+  rank: number,
+): void {
+  const native = row.native;
+  const children = native.children;
+  // children order must match createRow's HTML structure:
+  //  [0] rank, [1] name wrapper, [2] wpm-stat-narrow, [3] raw-stat-narrow,
+  //  [4] wpm-stat-wide, [5] acc-stat-wide, [6] raw-stat-wide,
+  //  [7] consistency-stat-wide, [8] date
+  if (children.length < 9) return;
+
+  const isPlaceholder = entry.wpm === -1;
+  const cached = entryCache.get(entry.id);
+  applyTierClass(row, rank, isPlaceholder);
+
+  // Rank always needs checking because it depends on sort position
+  const rankStr = String(rank);
+  setTextIfChanged(children.item(0), rankStr);
+
+  // Only patch fields that actually changed vs. the cached version
+  if (!cached || cached.name !== entry.name) {
+    // Update the nested .name element inside avatarNameBadge
+    const nameWrapper = children.item(1);
+    if (nameWrapper instanceof HTMLElement) {
+      const nameEl = nameWrapper.querySelector(".name");
+      setTextIfChanged(nameEl, entry.name);
+    }
+    // Also update data-name attribute
+    native.dataset["name"] = entry.name;
+  }
+
+  if (!cached || cached.wpm !== entry.wpm) {
+    const wpmNarrow = formatStat(entry.wpm, isPlaceholder);
+    setTextIfChanged(children.item(2), wpmNarrow);
+    const wpmWide = formatFloat(entry.wpm, isPlaceholder);
+    setTextIfChanged(children.item(4), wpmWide);
+  }
+
+  if (!cached || cached.raw !== entry.raw) {
+    const rawNarrow = formatStat(entry.raw, isPlaceholder);
+    setTextIfChanged(children.item(3), rawNarrow);
+    const rawWide = formatFloat(entry.raw, isPlaceholder);
+    setTextIfChanged(children.item(6), rawWide);
+  }
+
+  if (!cached || cached.acc !== entry.acc) {
+    const accWide = formatFloat(entry.acc, isPlaceholder, true);
+    setTextIfChanged(children.item(5), accWide);
+  }
+
+  if (!cached || cached.consistency !== entry.consistency) {
+    const conWide = formatFloat(entry.consistency, isPlaceholder, true);
+    setTextIfChanged(children.item(7), conWide);
+  }
+
+  if (!cached || cached.date !== entry.date) {
+    const dateStr = formatDate(entry.date, isPlaceholder);
+    setTextIfChanged(children.item(8), dateStr);
+  }
+}
+
+// --- Sort comparator: wpm descending, placeholders (wpm === -1) to bottom ---
+
+function leaderboardSort(a: LeaderboardEntry, b: LeaderboardEntry): number {
+  // Placeholders always go to the bottom
+  if (a.wpm === -1 && b.wpm !== -1) return 1;
+  if (a.wpm !== -1 && b.wpm === -1) return -1;
+  return b.wpm - a.wpm;
+}
+
+// --- Tier classification ---
+
+function getTierClass(rank: number, isPlaceholder: boolean): string {
+  if (isPlaceholder) return "tier-placeholder";
+  if (rank <= 3) return "tier-podium";
+  if (rank <= 10) return "tier-contender";
+  return "tier-field";
+}
+
+// --- Placeholder summary (collapses N placeholders into one row) ---
+
+function createPlaceholderSummary(count: number): ElementWithUtils {
+  const s = count !== 1 ? "s" : "";
+  const row = createElementWithUtils("div", {
+    classList: ["leaderboardRow", "placeholder-summary"],
+  });
+  row.setHtml(`
+    <div class="col rank"><i class="fas fa-hourglass-half"></i></div>
+    <div class="col name">
+      <span class="placeholder-count">${count}</span>
+      participant${s} awaiting first race
+    </div>
+    <div class="col stat narrow">&mdash;</div>
+    <div class="col stat narrow">&mdash;</div>
+    <div class="col stat wide">&mdash;</div>
+    <div class="col stat wide">&mdash;</div>
+    <div class="col stat wide">&mdash;</div>
+    <div class="col stat wide">&mdash;</div>
+    <div class="col date">&mdash;</div>
+  `);
+  return row;
+}
+
+function updatePlaceholderSummary(
+  container: ElementWithUtils,
+  count: number,
+): void {
+  if (count === 0) {
+    if (placeholderSummaryEl) {
+      placeholderSummaryEl.remove();
+      placeholderSummaryEl = null;
+    }
+    return;
+  }
+
+  if (!placeholderSummaryEl) {
+    placeholderSummaryEl = createPlaceholderSummary(count);
+  } else {
+    const nameCol = placeholderSummaryEl.native.querySelector(".col.name");
+    if (nameCol) {
+      const s = count !== 1 ? "s" : "";
+      nameCol.innerHTML = `<span class="placeholder-count">${count}</span> participant${s} awaiting first race`;
+    }
+  }
+
+  // Always ensure summary is at the bottom
+  container.append(placeholderSummaryEl);
+}
+
+// --- Reorder DOM nodes to match the entries array, with bounded FLIP ---
+
+function reorderAndAnimate(
+  container: ElementWithUtils,
+  sortedEntries: LeaderboardEntry[],
+  changedId?: string,
+): void {
+  const containerNative = container.native;
+
+  // --- FLIP: First --- batch all layout reads BEFORE any writes ---
+  // Only measure positions for the top N rows to avoid thrashing
+  const oldPositions = new Map<string, number>();
+  const measureLimit = Math.min(sortedEntries.length, FLIP_ANIMATION_LIMIT);
+
+  for (let i = 0; i < measureLimit; i++) {
+    const measuredEntry = sortedEntries[i];
+    if (!measuredEntry) continue;
+    const id = measuredEntry.id;
+    const node = rowNodeMap.get(id);
+    if (node !== undefined) {
+      oldPositions.set(id, node.native.getBoundingClientRect().top);
+    }
+  }
+
+  // --- Reorder DOM nodes using insertBefore ---
+  // This moves existing nodes without destroying them.
+  // If the node is already in the correct position, insertBefore is a no-op
+  // in terms of the browser's internal representation.
+  let refNode: Node | null = containerNative.firstChild;
+  for (const entry of sortedEntries) {
+    const row = rowNodeMap.get(entry.id);
+    if (row === undefined) continue;
+    const rowNative = row.native;
+
+    if (refNode !== rowNative) {
+      // Move node to the correct position
+      containerNative.insertBefore(rowNative, refNode);
+    } else {
+      // Already in position, advance reference
+      refNode = refNode.nextSibling;
+    }
+  }
+
+  // --- FLIP: Last + Invert + Play --- only for top N rows ---
+  requestAnimationFrame(() => {
+    for (let i = 0; i < measureLimit; i++) {
+      const entry = sortedEntries[i];
+      if (!entry) continue;
+      const id = entry.id;
+      const node = rowNodeMap.get(id);
+      if (node === undefined) continue;
+
+      const oldTop = oldPositions.get(id);
+      if (oldTop === undefined) {
+        // New entry appearing in top N -- fade in
+        node.animate({ opacity: [0, 1], duration: 300 });
+        continue;
+      }
+
+      const newTop = node.native.getBoundingClientRect().top;
+      const delta = oldTop - newTop;
+
+      if (delta === 0 && id !== changedId) continue;
+
+      const isTarget = id === changedId;
+      if (isTarget) {
+        node.native.style.zIndex = "100";
+        node.native.style.position = "relative";
+        node.animate({
+          translateY: [delta, delta * 0.3, 0],
+          scale: [1, 1.03, 1.03, 1],
+          boxShadow: [
+            "0 0 0 0 transparent",
+            "0 8px 32px rgba(255,255,255,0.15), 0 4px 16px rgba(100,200,255,0.2)",
+            "0 8px 32px rgba(255,255,255,0.15), 0 4px 16px rgba(100,200,255,0.2)",
+            "0 0 0 0 transparent",
+          ],
+          duration: 1000,
+          easing: "easeOutExpo",
+        });
+      } else if (delta !== 0) {
+        node.animate({
+          translateY: [delta, 0],
+          duration: 600,
+          easing: "easeOutQuint",
+        });
+      }
+    }
   });
 }
 
-export function update(updatedEntry: LeaderboardEntry): void {
-  const container = qs("#leaderboardBody");
+// --- Public API: init (full rebuild, used only on first load or hard reset) ---
+
+export function init(initialData: LeaderboardEntry[]): void {
+  const container = getContainer();
   if (container === null) return;
 
-  const idx = entries.findIndex((e) => e.id === updatedEntry.id);
-  if (idx !== -1) entries[idx] = updatedEntry;
-  else entries.push(updatedEntry);
+  clearCaches();
+  entries = [...initialData].sort(leaderboardSort);
+  const { activeEntries, placeholderCount } = splitLeaderboardEntries(entries);
 
-  const oldPositions = new Map<string, number>();
-  container.qsa(".leaderboardRow").forEach((row) => {
-    const key = row.native.dataset["key"];
-    if (key !== undefined && key !== "") {
-      oldPositions.set(key, row.native.getBoundingClientRect().top);
-    }
-  });
-
-  entries.sort((a, b) => b.wpm - a.wpm);
   container.empty();
-  entries.forEach((e, i) => {
-    container.append(createRow(e, i + 1));
-  });
+  for (let i = 0; i < activeEntries.length; i++) {
+    const entry = activeEntries[i];
+    if (!entry) continue;
+    const row = createRow(entry, i + 1);
+    container.append(row);
+    rowNodeMap.set(entry.id, row);
+    entryCache.set(entry.id, { ...entry });
+  }
+  updatePlaceholderSummary(container, placeholderCount);
+}
 
-  container.qsa(".leaderboardRow").forEach((row) => {
-    const key = row.native.dataset["key"];
-    if (key === undefined || key === "") return;
+// --- Public API: update (single-entry change, differential) ---
 
-    const oldTop = oldPositions.get(key);
-    const newTop = row.native.getBoundingClientRect().top;
+export function update(updatedEntry: LeaderboardEntry): void {
+  const container = getContainer();
+  if (container === null) return;
 
-    if (oldTop !== undefined) {
-      const delta = oldTop - newTop;
-      const isTarget = key === updatedEntry.id;
+  // Update or insert into the entries array
+  const idx = entries.findIndex((e) => e.id === updatedEntry.id);
+  if (idx !== -1) {
+    entries[idx] = updatedEntry;
+  } else {
+    entries.push(updatedEntry);
+  }
 
-      if (delta !== 0 || isTarget) {
-        if (isTarget) {
-          row.native.style.zIndex = "100";
-          row.native.style.position = "relative";
-          row.animate({
-            translateY: [delta, delta * 0.3, 0],
-            scale: [1, 1.03, 1.03, 1],
-            boxShadow: [
-              "0 0 0 0 transparent",
-              "0 8px 32px rgba(255,255,255,0.15), 0 4px 16px rgba(100,200,255,0.2)",
-              "0 8px 32px rgba(255,255,255,0.15), 0 4px 16px rgba(100,200,255,0.2)",
-              "0 0 0 0 transparent",
-            ],
-            duration: 1000,
-            easing: "easeOutExpo",
-          });
-        } else {
-          row.animate({
-            translateY: [delta, 0],
-            duration: 600,
-            easing: "easeOutQuint",
-          });
-        }
-      }
-    } else {
-      row.animate({ opacity: [0, 1], duration: 300 });
+  // Re-sort the data
+  entries.sort(leaderboardSort);
+  const { activeEntries, placeholderCount } = splitLeaderboardEntries(entries);
+  const activeIdSet = new Set(activeEntries.map((entry) => entry.id));
+
+  // Remove stale rows (deleted entries or entries that turned into placeholders)
+  const staleIds: string[] = [];
+  for (const [id, row] of rowNodeMap) {
+    if (!activeIdSet.has(id)) {
+      staleIds.push(id);
+      row.remove();
     }
-  });
+  }
+  for (const staleId of staleIds) {
+    rowNodeMap.delete(staleId);
+    entryCache.delete(staleId);
+  }
+
+  // Ensure rows exist for all active entries
+  for (let i = 0; i < activeEntries.length; i++) {
+    const entry = activeEntries[i];
+    if (!entry) continue;
+    if (!rowNodeMap.has(entry.id)) {
+      const row = createRow(entry, i + 1);
+      container.append(row);
+      rowNodeMap.set(entry.id, row);
+      entryCache.set(entry.id, { ...entry });
+    }
+  }
+
+  // Patch all rows whose rank or data changed, then reorder DOM
+  for (let i = 0; i < activeEntries.length; i++) {
+    const entry = activeEntries[i];
+    if (!entry) continue;
+    const existingRow = rowNodeMap.get(entry.id);
+    if (existingRow === undefined) continue;
+    const cached = entryCache.get(entry.id);
+    // Only touch DOM if data changed or rank shifted
+    if (!cached || !isSameEntry(cached, entry)) {
+      updateRowContent(existingRow, entry, i + 1);
+      entryCache.set(entry.id, { ...entry });
+    } else {
+      // Rank might have changed even if data is the same (another entry moved)
+      const rankEl = existingRow.native.children[0];
+      const rankStr = String(i + 1);
+      if (rankEl && rankEl.textContent !== rankStr) {
+        rankEl.textContent = rankStr;
+      }
+      applyTierClass(existingRow, i + 1, false);
+    }
+  }
+
+  updatePlaceholderSummary(container, placeholderCount);
+  reorderAndAnimate(
+    container,
+    activeEntries,
+    updatedEntry.wpm === -1 ? undefined : updatedEntry.id,
+  );
 }
 
 // ============ DUEL FUNCTIONS ============
@@ -836,14 +1321,16 @@ export const page = new Page({
   path: "/rbh/spectator-screen",
   beforeShow: async () => {
     pageElement = null;
+    cachedContainer = null;
     currentView = "leaderboard";
     entries = [];
+    clearCaches();
     hasWarnedLeaderboardFetch = false;
     leaderboardFetchInFlight = false;
     hasWarnedDuelStateFetch = false;
     duelStateFetchInFlight = false;
-    stopLeaderboardPolling();
-    stopDuelStatePolling();
+    teardownSpectatorPush();
+    stopFallbackPolling();
     resetDuelClock();
     reset();
   },
@@ -876,12 +1363,11 @@ export const page = new Page({
       reconcileLeaderboard(fallbackEntries);
     }
 
-    startDuelStatePolling();
-    startLeaderboardPolling();
+    setupSpectatorPush();
   },
   beforeHide: async () => {
-    stopLeaderboardPolling();
-    stopDuelStatePolling();
+    teardownSpectatorPush();
+    stopFallbackPolling();
     stopDuelClock();
   },
 });

@@ -51,6 +51,12 @@ export function joinRoom(
     return { status: "Room not found" };
   }
 
+  // Duel rooms are managed exclusively through duel-specific handlers.
+  // Keep them inaccessible from the generic room join path.
+  if (existingRoom.type === "duel") {
+    return { status: "Room not found" };
+  }
+
   if (existingRoom.state !== "LOBBY") {
     return { status: "Room is not in lobby state" };
   }

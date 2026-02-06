@@ -1,7 +1,11 @@
 // Duel state management - singleton store for duel-specific state
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, existsSync } from "fs";
+import { writeFile } from "fs/promises";
 import { DUEL_CONFIG, type DuelSide } from "../config.js";
 import Logger from "../utils/logger.js";
+
+const MAX_STORED_RESULTS = 1000;
+const PERSIST_DEBOUNCE_MS = 25;
 
 /**
  * Represents a participant in a duel (one per side L/R)
@@ -167,6 +171,11 @@ class DuelStore {
 
   // Latest final race result per OTP/user ID
   private leaderboard: DuelLeaderboard = {};
+
+  // Async persistence state (debounced + coalesced)
+  private persistDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  private persistInFlight = false;
+  private persistRequested = false;
 
   // ============================================================
   // Side Management
@@ -460,6 +469,7 @@ class DuelStore {
     };
 
     this.results.push(result);
+    this.trimResultsIfNeeded();
     this.upsertLeaderboardEntry(L, result.timestamp);
     this.upsertLeaderboardEntry(R, result.timestamp);
     this.persistResults();
@@ -533,6 +543,7 @@ class DuelStore {
           .map((value, index) => this.normalizeResult(value, index))
           .filter((value): value is DuelResult => value !== null);
         this.results = normalized;
+        this.trimResultsIfNeeded();
         this.rebuildLeaderboardFromResults();
         Logger.success(
           `Loaded ${this.results.length} duel results from ${path}`,
@@ -550,6 +561,7 @@ class DuelStore {
           this.results = rawResults
             .map((value, index) => this.normalizeResult(value, index))
             .filter((value): value is DuelResult => value !== null);
+          this.trimResultsIfNeeded();
         } else {
           this.results = [];
         }
@@ -572,22 +584,43 @@ class DuelStore {
    * Persist results to disk.
    */
   persistResults(): void {
-    try {
-      writeFileSync(
-        DUEL_CONFIG.RESULTS_PATH,
-        JSON.stringify(
-          {
-            results: this.results,
-            leaderboard: this.leaderboard,
-          },
-          null,
-          2,
-        ),
-        "utf-8",
-      );
-    } catch (error) {
-      Logger.warning(`Failed to persist duel results: ${error}`);
+    this.persistRequested = true;
+
+    if (this.persistDebounceTimer || this.persistInFlight) {
+      return;
     }
+
+    this.persistDebounceTimer = setTimeout(() => {
+      this.persistDebounceTimer = undefined;
+      this.flushPersist();
+    }, PERSIST_DEBOUNCE_MS);
+  }
+
+  private flushPersist(): void {
+    if (!this.persistRequested || this.persistInFlight) return;
+
+    this.persistRequested = false;
+    this.persistInFlight = true;
+
+    const payload = JSON.stringify(
+      {
+        results: this.results,
+        leaderboard: this.leaderboard,
+      },
+      null,
+      2,
+    );
+
+    void writeFile(DUEL_CONFIG.RESULTS_PATH, payload, "utf-8")
+      .catch((error) => {
+        Logger.warning(`Failed to persist duel results: ${error}`);
+      })
+      .finally(() => {
+        this.persistInFlight = false;
+        if (this.persistRequested) {
+          this.flushPersist();
+        }
+      });
   }
 
   private normalizeLeaderboard(value: unknown): DuelLeaderboard {
@@ -663,6 +696,16 @@ class DuelStore {
       R,
       winner,
     };
+  }
+
+  private trimResultsIfNeeded(): void {
+    if (this.results.length <= MAX_STORED_RESULTS) return;
+
+    const overflow = this.results.length - MAX_STORED_RESULTS;
+    this.results.splice(0, overflow);
+    Logger.info(
+      `Trimmed ${overflow} old duel result(s); keeping latest ${MAX_STORED_RESULTS}`,
+    );
   }
 
   // ============================================================

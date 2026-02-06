@@ -11,6 +11,7 @@ import type {
 } from "./room.js";
 import type { RoomConfig } from "./config.js";
 import type { DuelSide } from "../config.js";
+import type { DuelLeaderboard } from "../stores/duel-store.js";
 
 /**
  * Response format for duel acknowledgments
@@ -20,6 +21,28 @@ export interface DuelAckResponse {
   error?: string;
   data?: unknown;
 }
+
+export type DuelSpectatorSide = {
+  id: string;
+  name: string;
+  wpm: number;
+  connected: boolean;
+};
+
+export type DuelSpectatorPayload = {
+  serverTime: number;
+  roomId: string | null;
+  roomState: string | null;
+  active: boolean;
+  race: {
+    startAt: number | null;
+    duration: number;
+  };
+  sides: {
+    L: DuelSpectatorSide | null;
+    R: DuelSpectatorSide | null;
+  };
+};
 
 // Client -> Server Events
 /**
@@ -121,6 +144,14 @@ export type ClientToServerEvents = {
     data: { clientTime: number },
     callback: (response: { clientTime: number; serverTime: number }) => void,
   ) => void;
+  duel_spectator_subscribe: (
+    callback: (response: {
+      ok: boolean;
+      state: DuelSpectatorPayload;
+      leaderboard: DuelLeaderboard;
+    }) => void,
+  ) => void;
+  duel_spectator_unsubscribe: () => void;
 };
 
 // Server -> Client Events
@@ -194,6 +225,8 @@ export type ServerToClientEvents = {
     seed: number;
     raceDuration: number;
   }) => void;
+  duel_spectator_state: (data: DuelSpectatorPayload) => void;
+  duel_leaderboard_snapshot: (data: DuelLeaderboard) => void;
 };
 
 // Inter-server events (none for now)
