@@ -63,6 +63,37 @@ class RoomStore {
     return this.socketToRoom.get(socketId);
   }
 
+  transferUserSocket(
+    oldSocketId: string,
+    newSocketId: string,
+  ): { room: Room; user: User } | undefined {
+    const roomId = this.socketToRoom.get(oldSocketId);
+    if (roomId === undefined) return undefined;
+
+    const room = this.rooms.get(roomId);
+    if (!room) return undefined;
+
+    const existingUser = room.users[oldSocketId];
+    if (!existingUser) return undefined;
+
+    const transferredUser: User = {
+      ...existingUser,
+      id: newSocketId,
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    delete room.users[oldSocketId];
+    room.users[newSocketId] = transferredUser;
+
+    this.socketToRoom.delete(oldSocketId);
+    this.socketToRoom.set(newSocketId, roomId);
+
+    return {
+      room,
+      user: transferredUser,
+    };
+  }
+
   addUserToRoom(
     roomId: string,
     socketId: string,

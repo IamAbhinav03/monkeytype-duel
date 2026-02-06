@@ -448,6 +448,14 @@ TribeSocket.in.room.playerLeft((data) => {
 TribeSocket.in.room.left(() => {
   TribeState.setRoom(undefined);
   updateClientState(TribeTypes.CLIENT_STATE.CONNECTED);
+
+  if (isDuelModeEnabled()) {
+    TribeCarets.destroyAll();
+    TribeDelta.hide();
+    TribeCountdown.hide();
+    return;
+  }
+
   TribePageMenu.enableButtons();
   if (!$(".pageTribe").hasClass("active")) {
     NavigationEvent.dispatch("/tribe");

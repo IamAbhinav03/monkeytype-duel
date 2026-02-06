@@ -20,6 +20,20 @@ export type DuelFlowState =
 
 // --- Constants ---
 const STORAGE_KEY_SIDE = "duel_side";
+const ALLOWED_TRANSITIONS: Record<DuelFlowState, DuelFlowState[]> = {
+  SYSTEM_SELECT: ["OTP"],
+  OTP: ["EULA"],
+  EULA: ["PRACTICE_1"],
+  PRACTICE_1: ["RESULT_1"],
+  RESULT_1: ["COUNTDOWN_1", "PRACTICE_2"],
+  COUNTDOWN_1: ["PRACTICE_2"],
+  PRACTICE_2: ["RESULT_2"],
+  RESULT_2: ["COUNTDOWN_2", "LOBBY"],
+  COUNTDOWN_2: ["LOBBY"],
+  LOBBY: ["RACING"],
+  RACING: ["RESULTS", "LOBBY"],
+  RESULTS: [],
+};
 
 // --- State ---
 // Side is persisted to localStorage so user doesn't have to reselect on refresh
@@ -58,6 +72,18 @@ export function isUserAuthenticated(): boolean {
 
 // --- Setters ---
 export function setFlowState(state: DuelFlowState): void {
+  const isResetTransition = state === "OTP" || state === "SYSTEM_SELECT";
+  if (
+    state !== flowState &&
+    !isResetTransition &&
+    !(ALLOWED_TRANSITIONS[flowState] ?? []).includes(state)
+  ) {
+    console.warn(
+      `[DuelState] Blocked invalid flow transition: ${flowState} -> ${state}`,
+    );
+    return;
+  }
+
   flowState = state;
   console.log(`[DuelState] Flow state changed to: ${state}`);
 
@@ -86,13 +112,18 @@ export function setSide(newSide: DuelSide | undefined): void {
     localStorage.removeItem(STORAGE_KEY_SIDE);
     console.log(`[DuelState] Side cleared`);
   }
+
+  updateBodyClass();
 }
 
 export function setAuthenticated(newUserId: string, newUsername: string): void {
   userId = newUserId;
   username = newUsername;
+  practiceCount = 0;
   isAuthenticated = true;
   console.log(`[DuelState] Authenticated as: ${newUsername} (${newUserId})`);
+
+  updateBodyClass();
 }
 
 export function incrementPractice(): number {
@@ -101,21 +132,18 @@ export function incrementPractice(): number {
   return practiceCount;
 }
 
-/**
- * Clear persisted side from localStorage only (keep in-memory value).
- * Used when entering LOBBY — refresh should go back to SYSTEM_SELECT.
- */
-export function clearPersistedSide(): void {
-  localStorage.removeItem(STORAGE_KEY_SIDE);
-  console.log(`[DuelState] Cleared persisted side from localStorage`);
-}
-
 // --- Reset Functions ---
 export function clearSide(): void {
   side = undefined;
   localStorage.removeItem(STORAGE_KEY_SIDE);
   flowState = "SYSTEM_SELECT";
+  userId = undefined;
+  username = undefined;
+  practiceCount = 0;
+  isAuthenticated = false;
   console.log(`[DuelState] Side cleared`);
+
+  updateBodyClass();
 }
 
 export function resetToOtp(): void {
@@ -125,6 +153,8 @@ export function resetToOtp(): void {
   isAuthenticated = false;
   flowState = "OTP";
   console.log(`[DuelState] Reset to OTP`);
+
+  updateBodyClass();
 }
 
 export function fullReset(): void {
@@ -132,6 +162,16 @@ export function fullReset(): void {
   resetToOtp();
   document.body.classList.remove("duelFlowActive");
   console.log(`[DuelState] Full reset`);
+}
+
+export function clearAuthentication(): void {
+  userId = undefined;
+  username = undefined;
+  practiceCount = 0;
+  isAuthenticated = false;
+  flowState = side ? "OTP" : "SYSTEM_SELECT";
+
+  updateBodyClass();
 }
 
 // --- Constants ---

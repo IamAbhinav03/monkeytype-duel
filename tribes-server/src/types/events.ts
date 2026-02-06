@@ -116,6 +116,7 @@ export type ClientToServerEvents = {
     callback: (response: DuelAckResponse) => void,
   ) => void;
   duel_join_lobby: (callback: (response: DuelAckResponse) => void) => void;
+  duel_reset_session: (callback: (response: DuelAckResponse) => void) => void;
   duel_time_sync: (
     data: { clientTime: number },
     callback: (response: { clientTime: number; serverTime: number }) => void,

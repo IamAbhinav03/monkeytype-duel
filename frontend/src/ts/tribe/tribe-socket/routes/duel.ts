@@ -56,6 +56,14 @@ async function joinLobby(): Promise<DuelAckResponse> {
   });
 }
 
+async function resetSession(): Promise<DuelAckResponse> {
+  return new Promise((resolve) => {
+    Socket.emit("duel_reset_session", (response: DuelAckResponse) => {
+      resolve(response);
+    });
+  });
+}
+
 async function timeSync(clientTime: number): Promise<TimeSyncResponse> {
   return new Promise((resolve) => {
     Socket.emit(
@@ -101,6 +109,7 @@ export default {
     authenticate,
     practiceComplete,
     joinLobby,
+    resetSession,
     timeSync,
   },
 };
