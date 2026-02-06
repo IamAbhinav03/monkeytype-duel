@@ -369,6 +369,7 @@ function tryRecordDuelResult(room: Room): void {
   const L = duelStore.getParticipant("L");
   const R = duelStore.getParticipant("R");
   if (!L || !R) return;
+  if (!L.isAuthenticated || !R.isAuthenticated) return;
 
   const LUser = room.users[L.socketId];
   const RUser = room.users[R.socketId];

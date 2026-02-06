@@ -1,0 +1,53 @@
+{
+  "results": [],
+  "leaderboard": {
+    "111111": {
+      "name": "sai",
+      "wpm": -1,
+      "acc": -1,
+      "raw": -1,
+      "consistency": -1,
+      "date": 0
+    },
+    "222222": {
+      "name": "sanchak",
+      "wpm": -1,
+      "acc": -1,
+      "raw": -1,
+      "consistency": -1,
+      "date": 0
+    },
+    "333333": {
+      "name": "abhinav",
+      "wpm": -1,
+      "acc": -1,
+      "raw": -1,
+      "consistency": -1,
+      "date": 0
+    },
+    "444444": {
+      "name": "ojas",
+      "wpm": -1,
+      "acc": -1,
+      "raw": -1,
+      "consistency": -1,
+      "date": 0
+    },
+    "555555": {
+      "name": "kanishk",
+      "wpm": -1,
+      "acc": -1,
+      "raw": -1,
+      "consistency": -1,
+      "date": 0
+    },
+    "000000": {
+      "name": "ayush",
+      "wpm": -1,
+      "acc": -1,
+      "raw": -1,
+      "consistency": -1,
+      "date": 0
+    }
+  }
+}

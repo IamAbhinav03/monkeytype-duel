@@ -8,7 +8,7 @@ import { registerUserHandlers } from "./controllers/user-controller.js";
 import { registerDevHandlers } from "./controllers/dev-controller.js";
 import { registerDuelHandlers } from "./controllers/duel-controller.js";
 import { startMatchmaking } from "./services/matchmaking-service.js";
-import { loadOtpMap } from "./utils/duel-otp.js";
+import { loadOtpMap, getOtpMap } from "./utils/duel-otp.js";
 import { duelStore } from "./stores/duel-store.js";
 import { roomStore } from "./stores/room-store.js";
 import { DUEL_CONFIG } from "./config.js";
@@ -161,6 +161,7 @@ const io = new Server<
 // Load OTP map and persisted results for duel mode at startup
 loadOtpMap();
 duelStore.loadResults();
+duelStore.seedLeaderboardFromOtpMap(getOtpMap());
 
 // Handle new socket connections
 io.on("connection", (socket) => {

@@ -489,6 +489,33 @@ class DuelStore {
   }
 
   /**
+   * Seed the leaderboard with placeholder entries for all OTP users.
+   * Placeholder entries have wpm: -1 and appear greyed out on the frontend.
+   * Only adds entries for users not already in the leaderboard.
+   */
+  seedLeaderboardFromOtpMap(otpMap: Readonly<Record<string, string>>): void {
+    let seeded = 0;
+    for (const [otpCode, username] of Object.entries(otpMap)) {
+      if (this.leaderboard[otpCode]) continue;
+      this.leaderboard[otpCode] = {
+        name: username,
+        wpm: -1,
+        acc: -1,
+        raw: -1,
+        consistency: -1,
+        date: 0,
+      };
+      seeded++;
+    }
+    if (seeded > 0) {
+      this.persistResults();
+      Logger.info(
+        `Seeded ${seeded} placeholder leaderboard entries from OTP map`,
+      );
+    }
+  }
+
+  /**
    * Load results from disk. Safe to call at startup.
    */
   loadResults(): void {
