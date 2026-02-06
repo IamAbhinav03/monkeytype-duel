@@ -27,14 +27,123 @@ export interface DuelLiveWpm {
   updatedAt: number;
 }
 
+export interface DuelResultSide {
+  userId: string;
+  username: string;
+  wpm: number;
+  raw: number;
+  acc: number;
+  consistency: number;
+}
+
+type DuelResultWinner = DuelSide | "TIE";
+
 /**
  * A completed duel result record
  */
 export interface DuelResult {
   timestamp: number;
-  L: { wpm: number; raw: number; acc: number; consistency: number };
-  R: { wpm: number; raw: number; acc: number; consistency: number };
-  winner: DuelSide | "TIE";
+  L: DuelResultSide;
+  R: DuelResultSide;
+  winner: DuelResultWinner;
+}
+
+export interface DuelLeaderboardEntry {
+  name: string;
+  wpm: number;
+  acc: number;
+  raw: number;
+  consistency: number;
+  date: number;
+}
+
+export type DuelLeaderboard = Record<string, DuelLeaderboardEntry>;
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function sanitizeIdentity(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function normalizeResultSide(
+  side: DuelSide,
+  value: unknown,
+): DuelResultSide | null {
+  if (value === null || value === undefined || typeof value !== "object") {
+    return null;
+  }
+
+  const resultSide = value as Record<string, unknown>;
+  const wpm = resultSide["wpm"];
+  const raw = resultSide["raw"];
+  const acc = resultSide["acc"];
+  const consistency = resultSide["consistency"];
+
+  if (
+    !isFiniteNumber(wpm) ||
+    !isFiniteNumber(raw) ||
+    !isFiniteNumber(acc) ||
+    !isFiniteNumber(consistency)
+  ) {
+    return null;
+  }
+
+  const username = sanitizeIdentity(resultSide["username"], `System ${side}`);
+  const userId = sanitizeIdentity(resultSide["userId"], `${side}:${username}`);
+
+  return {
+    userId,
+    username,
+    wpm,
+    raw,
+    acc,
+    consistency,
+  };
+}
+
+function computeWinner(L: DuelResultSide, R: DuelResultSide): DuelResultWinner {
+  return L.wpm > R.wpm ? "L" : R.wpm > L.wpm ? "R" : "TIE";
+}
+
+function normalizeLeaderboardEntry(
+  value: unknown,
+): DuelLeaderboardEntry | null {
+  if (value === null || value === undefined || typeof value !== "object") {
+    return null;
+  }
+
+  const entry = value as Record<string, unknown>;
+  const name = entry["name"];
+  const wpm = entry["wpm"];
+  const raw = entry["raw"];
+  const acc = entry["acc"];
+  const consistency = entry["consistency"];
+  const date = entry["date"];
+
+  if (
+    typeof name !== "string" ||
+    name.trim().length === 0 ||
+    !isFiniteNumber(wpm) ||
+    !isFiniteNumber(raw) ||
+    !isFiniteNumber(acc) ||
+    !isFiniteNumber(consistency) ||
+    !isFiniteNumber(date)
+  ) {
+    return null;
+  }
+
+  return {
+    name: name.trim(),
+    wpm,
+    raw,
+    acc,
+    consistency,
+    date,
+  };
 }
 
 class DuelStore {
@@ -55,6 +164,9 @@ class DuelStore {
 
   // Result history (persists across duels, cleared on server restart)
   private results: DuelResult[] = [];
+
+  // Latest final race result per OTP/user ID
+  private leaderboard: DuelLeaderboard = {};
 
   // ============================================================
   // Side Management
@@ -339,21 +451,17 @@ class DuelStore {
   /**
    * Add a completed duel result and persist to disk.
    */
-  addResult(
-    L: { wpm: number; raw: number; acc: number; consistency: number },
-    R: { wpm: number; raw: number; acc: number; consistency: number },
-  ): DuelResult {
-    const winner: DuelSide | "TIE" =
-      L.wpm > R.wpm ? "L" : R.wpm > L.wpm ? "R" : "TIE";
-
+  addResult(L: DuelResultSide, R: DuelResultSide): DuelResult {
     const result: DuelResult = {
       timestamp: Date.now(),
       L,
       R,
-      winner,
+      winner: computeWinner(L, R),
     };
 
     this.results.push(result);
+    this.upsertLeaderboardEntry(L, result.timestamp);
+    this.upsertLeaderboardEntry(R, result.timestamp);
     this.persistResults();
     return result;
   }
@@ -363,6 +471,14 @@ class DuelStore {
    */
   getResults(): DuelResult[] {
     return [...this.results];
+  }
+
+  /**
+   * Project duel results into a stable identity map keyed by OTP/user ID.
+   * Each entry represents the latest final race result for that user.
+   */
+  getLeaderboard(): DuelLeaderboard {
+    return { ...this.leaderboard };
   }
 
   /**
@@ -386,7 +502,36 @@ class DuelStore {
       const raw = readFileSync(path, "utf-8");
       const parsed: unknown = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        this.results = parsed as DuelResult[];
+        const normalized = parsed
+          .map((value, index) => this.normalizeResult(value, index))
+          .filter((value): value is DuelResult => value !== null);
+        this.results = normalized;
+        this.rebuildLeaderboardFromResults();
+        Logger.success(
+          `Loaded ${this.results.length} duel results from ${path}`,
+        );
+      } else if (
+        parsed !== null &&
+        parsed !== undefined &&
+        typeof parsed === "object"
+      ) {
+        const record = parsed as Record<string, unknown>;
+        const rawResults = record["results"];
+        const rawLeaderboard = record["leaderboard"];
+
+        if (Array.isArray(rawResults)) {
+          this.results = rawResults
+            .map((value, index) => this.normalizeResult(value, index))
+            .filter((value): value is DuelResult => value !== null);
+        } else {
+          this.results = [];
+        }
+
+        this.leaderboard = this.normalizeLeaderboard(rawLeaderboard);
+        if (Object.keys(this.leaderboard).length === 0) {
+          this.rebuildLeaderboardFromResults();
+        }
+
         Logger.success(
           `Loaded ${this.results.length} duel results from ${path}`,
         );
@@ -403,12 +548,94 @@ class DuelStore {
     try {
       writeFileSync(
         DUEL_CONFIG.RESULTS_PATH,
-        JSON.stringify(this.results, null, 2),
+        JSON.stringify(
+          {
+            results: this.results,
+            leaderboard: this.leaderboard,
+          },
+          null,
+          2,
+        ),
         "utf-8",
       );
     } catch (error) {
       Logger.warning(`Failed to persist duel results: ${error}`);
     }
+  }
+
+  private normalizeLeaderboard(value: unknown): DuelLeaderboard {
+    if (value === null || value === undefined || typeof value !== "object") {
+      return {};
+    }
+
+    const leaderboard: DuelLeaderboard = {};
+    for (const [id, entry] of Object.entries(value)) {
+      const normalizedId = sanitizeIdentity(id, "");
+      if (normalizedId === "") continue;
+
+      const normalizedEntry = normalizeLeaderboardEntry(entry);
+      if (!normalizedEntry) continue;
+
+      leaderboard[normalizedId] = normalizedEntry;
+    }
+    return leaderboard;
+  }
+
+  private upsertLeaderboardEntry(
+    side: DuelResultSide,
+    timestamp: number,
+  ): void {
+    this.leaderboard[side.userId] = {
+      name: side.username,
+      wpm: side.wpm,
+      acc: side.acc,
+      raw: side.raw,
+      consistency: side.consistency,
+      date: timestamp,
+    };
+  }
+
+  private rebuildLeaderboardFromResults(): void {
+    this.leaderboard = {};
+    for (const result of this.results) {
+      this.upsertLeaderboardEntry(result.L, result.timestamp);
+      this.upsertLeaderboardEntry(result.R, result.timestamp);
+    }
+  }
+
+  private normalizeResult(value: unknown, index: number): DuelResult | null {
+    if (value === null || value === undefined || typeof value !== "object") {
+      Logger.warning(`Skipping invalid duel result at index ${index}`);
+      return null;
+    }
+
+    const record = value as Record<string, unknown>;
+    const L = normalizeResultSide("L", record["L"]);
+    const R = normalizeResultSide("R", record["R"]);
+
+    if (!L || !R) {
+      Logger.warning(
+        `Skipping duel result at index ${index} due to malformed side data`,
+      );
+      return null;
+    }
+
+    const winnerRaw = record["winner"];
+    const winner: DuelResultWinner =
+      winnerRaw === "L" || winnerRaw === "R" || winnerRaw === "TIE"
+        ? winnerRaw
+        : computeWinner(L, R);
+
+    const timestamp = isFiniteNumber(record["timestamp"])
+      ? record["timestamp"]
+      : Date.now();
+
+    return {
+      timestamp,
+      L,
+      R,
+      winner,
+    };
   }
 
   // ============================================================
@@ -446,6 +673,7 @@ class DuelStore {
   clearAll(): void {
     this.fullReset();
     this.results = [];
+    this.leaderboard = {};
   }
 }
 

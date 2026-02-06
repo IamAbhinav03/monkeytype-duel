@@ -35,6 +35,7 @@ let eulaInterval: ReturnType<typeof setInterval> | undefined;
 let eulaTimeout: ReturnType<typeof setTimeout> | undefined;
 let waitingNavigationTimeout: ReturnType<typeof setTimeout> | undefined;
 let showLobbyTimeout: ReturnType<typeof setTimeout> | undefined;
+let raceCountdownInterval: ReturnType<typeof setInterval> | undefined;
 
 /**
  * Initialize the duel flow.
@@ -731,15 +732,29 @@ export function onOpponentLeft(_side: DuelSide): void {
     duration: 3,
   });
 
-  // If we're in lobby or racing, reset to lobby waiting state
+  // If we're in lobby or racing, cancel everything and return to lobby
   const state = DuelState.getFlowState();
   if (state === "LOBBY" || state === "RACING") {
+    // Cancel all pending race timers (scheduled navigation, countdown, etc.)
+    cleanupTransientTimers();
+    hideDuelBanner();
+
+    // Hide countdown overlay if it was showing
+    void import("../tribe-countdown").then((TribeCountdown) => {
+      TribeCountdown.hide2();
+    });
+
     DuelState.setFlowState("LOBBY");
 
-    // Refresh the lobby UI
-    if (state === "LOBBY") {
+    // Navigate back to tribe/lobby
+    NavigationEvent.dispatch("/tribe", {
+      tribeOverride: true,
+      force: true,
+    });
+
+    setTimeout(() => {
       setupDuelLobby();
-    }
+    }, 300);
   }
 }
 
@@ -833,6 +848,7 @@ export function onRaceScheduled(
  * Navigate to test page and start countdown timer.
  */
 function navigateToTestAndStartCountdown(startAt: number): void {
+  if (DuelState.getFlowState() !== "RACING") return;
   console.log("[DuelFlow] Navigating to test page...");
 
   NavigationEvent.dispatch("/", {
@@ -881,6 +897,7 @@ function waitForWordsAndStartCountdown(startAt: number, attempt: number): void {
   const maxAttempts = 10;
 
   setTimeout(() => {
+    if (DuelState.getFlowState() !== "RACING") return;
     const wordsEl = document.getElementById("words");
     if (wordsEl || attempt >= maxAttempts) {
       if (!wordsEl) {
@@ -900,6 +917,7 @@ function waitForWordsAndStartCountdown(startAt: number, attempt: number): void {
  * Start the race countdown timer.
  */
 function startRaceCountdown(startAt: number): void {
+  if (DuelState.getFlowState() !== "RACING") return;
   import("../tribe-countdown")
     .then((TribeCountdown) => {
       TribeCountdown.show2();
@@ -929,12 +947,13 @@ function startRaceCountdown(startAt: number): void {
       let lastPlayedSecond = remaining;
 
       // Update countdown every 100ms for smooth display
-      const countdownInterval = setInterval(() => {
+      raceCountdownInterval = setInterval(() => {
         const currentTime = DuelTimeSync.getServerNow();
         remaining = Math.ceil((startAt - currentTime) / 1000);
 
         if (remaining <= 0) {
-          clearInterval(countdownInterval);
+          clearInterval(raceCountdownInterval);
+          raceCountdownInterval = undefined;
           TribeCountdown.hide2();
           TribeSound.play("cd_go");
           console.log("[DuelFlow] Starting race now!");
@@ -961,6 +980,7 @@ function startRaceCountdown(startAt: number): void {
  * This is called AFTER the countdown reaches 0.
  */
 function startDuelRace(): void {
+  if (DuelState.getFlowState() !== "RACING") return;
   // NOW enable typing — set room state to RACE_ONGOING and isTyping = true
   void import("../tribe-state").then((TribeState) => {
     const room = TribeState.getRoom();
@@ -1293,6 +1313,10 @@ function cleanupTransientTimers(): void {
   if (showLobbyTimeout) {
     clearTimeout(showLobbyTimeout);
     showLobbyTimeout = undefined;
+  }
+  if (raceCountdownInterval) {
+    clearInterval(raceCountdownInterval);
+    raceCountdownInterval = undefined;
   }
 }
 

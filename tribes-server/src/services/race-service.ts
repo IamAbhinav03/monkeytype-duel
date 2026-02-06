@@ -20,7 +20,6 @@ import type {
   SocketData,
 } from "../types/events.js";
 import { generateSeed } from "../utils/id-generator.js";
-import { DUEL_CONFIG } from "../config.js";
 import Logger from "../utils/logger.js";
 
 type TribesServer = Server<
@@ -240,6 +239,9 @@ function handleReadyToContinue(io: TribesServer, room: Room): void {
 
 function handleBackToLobby(io: TribesServer, room: Room): void {
   timerService.clearAllForRoom(room.id);
+  if (room.type === "duel") {
+    duelStore.clearLiveWpm();
+  }
   roomStore.resetRoomForNextRace(room.id);
   io.to(room.id).emit("room_back_to_lobby");
 }
@@ -287,6 +289,10 @@ export function updateProgress(
   const room = roomStore.getRoomBySocketId(socketId);
   if (!room) return;
 
+  // Only accept progress during active race phases
+  if (room.state !== "RACE_ONGOING" && room.state !== "RACE_ONE_FINISHED")
+    return;
+
   const user = room.users[socketId];
   if (!user) return;
 
@@ -319,6 +325,17 @@ export function submitResult(
   const user = room.users[socketId];
   if (!user) return;
 
+  // State guard: only accept results during active race phases
+  const activeStates: RoomState[] = [
+    "RACE_ONGOING",
+    "RACE_ONE_FINISHED",
+    "RACE_AWAITING_RESULTS",
+  ];
+  if (!activeStates.includes(room.state)) return;
+
+  // Idempotency guard: ignore duplicate submissions
+  if (user.isFinished) return;
+
   user.result = result;
   user.isFinished = true;
   user.isTyping = false;
@@ -338,38 +355,47 @@ export function submitResult(
     room.state !== "RACE_AWAITING_RESULTS"
   ) {
     transitionRoom(io, room.id, "RACE_AWAITING_RESULTS");
-
-    // For duel rooms, record paired result when both finish
-    if (room.type === "duel") {
-      const L = duelStore.getParticipant("L");
-      const R = duelStore.getParticipant("R");
-
-      if (L && R) {
-        const LUser = room.users[L.socketId];
-        const RUser = room.users[R.socketId];
-
-        if (LUser?.result && RUser?.result) {
-          duelStore.addResult(
-            {
-              wpm: LUser.result.wpm,
-              raw: LUser.result.raw,
-              acc: LUser.result.acc,
-              consistency: LUser.result.consistency,
-            },
-            {
-              wpm: RUser.result.wpm,
-              raw: RUser.result.raw,
-              acc: RUser.result.acc,
-              consistency: RUser.result.consistency,
-            },
-          );
-          Logger.info(
-            `Duel result recorded: L=${LUser.result.wpm}wpm, R=${RUser.result.wpm}wpm`,
-          );
-        }
-      }
-    }
   }
+
+  // For duel rooms, try to record result after every submission
+  if (room.type === "duel") {
+    tryRecordDuelResult(room);
+  }
+}
+
+function tryRecordDuelResult(room: Room): void {
+  if (room.duelResultRecorded) return;
+
+  const L = duelStore.getParticipant("L");
+  const R = duelStore.getParticipant("R");
+  if (!L || !R) return;
+
+  const LUser = room.users[L.socketId];
+  const RUser = room.users[R.socketId];
+  if (!LUser?.result || !RUser?.result) return;
+
+  room.duelResultRecorded = true;
+  duelStore.addResult(
+    {
+      userId: L.userId,
+      username: L.username || LUser.name,
+      wpm: LUser.result.wpm,
+      raw: LUser.result.raw,
+      acc: LUser.result.acc,
+      consistency: LUser.result.consistency,
+    },
+    {
+      userId: R.userId,
+      username: R.username || RUser.name,
+      wpm: RUser.result.wpm,
+      raw: RUser.result.raw,
+      acc: RUser.result.acc,
+      consistency: RUser.result.consistency,
+    },
+  );
+  Logger.info(
+    `Duel result recorded: L=${LUser.result.wpm}wpm, R=${RUser.result.wpm}wpm`,
+  );
 }
 
 export function forceFinishRace(

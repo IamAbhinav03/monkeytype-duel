@@ -113,6 +113,7 @@ export type Room = {
   // Duel-specific fields
   type?: RoomType;
   startAt?: number; // Server timestamp for synchronized start
+  duelResultRecorded?: boolean; // Idempotency flag for duel result recording
 };
 
 export type PublicRoomData = {

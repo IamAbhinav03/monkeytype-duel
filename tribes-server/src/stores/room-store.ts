@@ -271,6 +271,8 @@ class RoomStore {
     if (!room) return;
 
     room.seed = generateSeed();
+    room.startAt = undefined;
+    room.duelResultRecorded = false;
     room.maxRaw = 0;
     room.maxWpm = 0;
     room.minRaw = Infinity;

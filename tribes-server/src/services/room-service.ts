@@ -102,6 +102,8 @@ export function leaveRoom(io: TribesServer, socket: TribesSocket): void {
 }
 
 export function handleDisconnect(io: TribesServer, socket: TribesSocket): void {
+  const room = roomStore.getRoomBySocketId(socket.id);
+  if (room?.type === "duel") return; // Duel handler manages grace period
   leaveRoom(io, socket);
 }
 

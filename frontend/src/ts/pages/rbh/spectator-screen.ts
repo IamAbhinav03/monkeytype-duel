@@ -1,10 +1,12 @@
 import Page from "../../pages/page";
 import { qs, ElementWithUtils, createElementWithUtils } from "../../utils/dom";
 import { addToGlobal } from "../../utils/misc";
+import { getTribesServerUrl } from "../../utils/tribe";
 
 // ============ TYPES ============
 
 type LeaderboardEntry = {
+  id: string;
   name: string;
   wpm: number;
   acc: number;
@@ -26,21 +28,57 @@ type DuelState = {
   maxTime: number;
 };
 
+type DuelSpectatorSide = {
+  id: string;
+  name: string;
+  wpm: number;
+  connected: boolean;
+};
+
+type DuelSpectatorPayload = {
+  serverTime: number;
+  roomId: string | null;
+  roomState: string | null;
+  active: boolean;
+  race: {
+    startAt: number | null;
+    duration: number;
+  };
+  sides: {
+    L: DuelSpectatorSide | null;
+    R: DuelSpectatorSide | null;
+  };
+};
+
 type ViewType = "leaderboard" | "duel";
 
 // ============ CONFIGURATION ============
-const USE_DUMMY_DATA = true;
-const DUMMY_DATA_PATH = "/data/dummy-participants.json";
-const PROD_DATA_PATH = "/data/participants.json";
+const DUEL_LEADERBOARD_ENDPOINT = "/duel/leaderboard";
+const DUEL_SPECTATOR_ENDPOINT = "/duel/spectator";
+const LEADERBOARD_POLL_INTERVAL_MS = 1000;
+const DUEL_STATE_POLL_INTERVAL_MS = 250;
+const DUEL_CLOCK_TICK_MS = 100;
+const FALLBACK_DATA_PATH = "/data/dummy-participants.json";
+const DEFAULT_LEFT_NAME = "System Left";
+const DEFAULT_RIGHT_NAME = "System Right";
 
 // ============ STATE ============
 
 // Current view
-// let currentView: ViewType = "leaderboard";
-let currentView: ViewType = "duel";
+let currentView: ViewType = "leaderboard";
 
 // Leaderboard state
 let entries: LeaderboardEntry[] = [];
+let leaderboardPollInterval: ReturnType<typeof setInterval> | undefined;
+let leaderboardFetchInFlight = false;
+let hasWarnedLeaderboardFetch = false;
+let duelStatePollInterval: ReturnType<typeof setInterval> | undefined;
+let duelStateFetchInFlight = false;
+let hasWarnedDuelStateFetch = false;
+let duelClockInterval: ReturnType<typeof setInterval> | undefined;
+let duelClockStartAt: number | null = null;
+let duelClockDuration = 30;
+let duelServerOffset = 0;
 
 // Duel state
 const duelState: DuelState = {
@@ -58,6 +96,389 @@ let pageElement: ElementWithUtils | null = null;
 function getPageElement(): ElementWithUtils | null {
   pageElement ??= qs("#pageRbhSpectatorScreen");
   return pageElement;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function getDuelLeaderboardUrl(): string {
+  return `${getTribesServerUrl()}${DUEL_LEADERBOARD_ENDPOINT}`;
+}
+
+function getDuelSpectatorUrl(): string {
+  return `${getTribesServerUrl()}${DUEL_SPECTATOR_ENDPOINT}`;
+}
+
+function normalizeLeaderboardEntry(
+  value: unknown,
+  fallbackId?: string,
+): LeaderboardEntry | null {
+  if (value === null || value === undefined || typeof value !== "object") {
+    return null;
+  }
+
+  const entry = value as Record<string, unknown>;
+  const id = entry["id"];
+  const name = entry["name"];
+  const wpm = entry["wpm"];
+  const acc = entry["acc"];
+  const raw = entry["raw"];
+  const consistency = entry["consistency"];
+  const date = entry["date"];
+
+  if (
+    typeof name !== "string" ||
+    name.trim().length === 0 ||
+    !isFiniteNumber(wpm) ||
+    !isFiniteNumber(acc) ||
+    !isFiniteNumber(raw) ||
+    !isFiniteNumber(consistency)
+  ) {
+    return null;
+  }
+
+  const resolvedId =
+    typeof id === "string" && id.trim().length > 0
+      ? id.trim()
+      : (fallbackId ?? name.trim());
+
+  return {
+    id: resolvedId,
+    name: name.trim(),
+    wpm,
+    acc,
+    raw,
+    consistency,
+    date: isFiniteNumber(date) ? date : Date.now(),
+  };
+}
+
+function parseLeaderboardPayload(payload: unknown): LeaderboardEntry[] {
+  const parsed: LeaderboardEntry[] = [];
+
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const normalized = normalizeLeaderboardEntry(item);
+      if (normalized) {
+        parsed.push(normalized);
+      }
+    }
+    return parsed;
+  }
+
+  if (
+    payload !== null &&
+    payload !== undefined &&
+    typeof payload === "object"
+  ) {
+    for (const [id, value] of Object.entries(payload)) {
+      const normalized = normalizeLeaderboardEntry(value, id);
+      if (normalized) {
+        parsed.push(normalized);
+      }
+    }
+    return parsed;
+  }
+
+  return parsed;
+}
+
+function isSameEntry(a: LeaderboardEntry, b: LeaderboardEntry): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.wpm === b.wpm &&
+    a.acc === b.acc &&
+    a.raw === b.raw &&
+    a.consistency === b.consistency &&
+    a.date === b.date
+  );
+}
+
+function reconcileLeaderboard(nextEntries: LeaderboardEntry[]): void {
+  const sortedNext = [...nextEntries].sort((a, b) => b.wpm - a.wpm);
+
+  const nextIdSet = new Set(sortedNext.map((entry) => entry.id));
+  const sameShape =
+    entries.length === sortedNext.length &&
+    entries.every((entry) => nextIdSet.has(entry.id));
+
+  if (!sameShape || (entries.length === 0 && sortedNext.length === 0)) {
+    init(sortedNext);
+    return;
+  }
+
+  for (const nextEntry of sortedNext) {
+    const existing = entries.find((entry) => entry.id === nextEntry.id);
+    if (!existing || !isSameEntry(existing, nextEntry)) {
+      update(nextEntry);
+    }
+  }
+}
+
+async function fetchLeaderboardFromServer(): Promise<
+  LeaderboardEntry[] | null
+> {
+  const response = await fetch(getDuelLeaderboardUrl(), {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const payload: unknown = await response.json();
+  return parseLeaderboardPayload(payload);
+}
+
+async function fetchFallbackLeaderboard(): Promise<LeaderboardEntry[]> {
+  const response = await fetch(FALLBACK_DATA_PATH, {
+    cache: "no-store",
+  });
+  if (!response.ok) return [];
+  const payload: unknown = await response.json();
+  return parseLeaderboardPayload(payload);
+}
+
+async function syncLeaderboardFromServer(): Promise<boolean> {
+  if (leaderboardFetchInFlight) return false;
+  leaderboardFetchInFlight = true;
+
+  try {
+    const nextEntries = await fetchLeaderboardFromServer();
+    if (nextEntries !== null) {
+      reconcileLeaderboard(nextEntries);
+    }
+    hasWarnedLeaderboardFetch = false;
+    return true;
+  } catch (error) {
+    if (!hasWarnedLeaderboardFetch) {
+      console.warn(
+        "[SpectatorScreen] Failed to fetch duel leaderboard:",
+        error,
+      );
+      hasWarnedLeaderboardFetch = true;
+    }
+    return false;
+  } finally {
+    leaderboardFetchInFlight = false;
+  }
+}
+
+function startLeaderboardPolling(): void {
+  stopLeaderboardPolling();
+  leaderboardPollInterval = setInterval(() => {
+    void syncLeaderboardFromServer();
+  }, LEADERBOARD_POLL_INTERVAL_MS);
+}
+
+function stopLeaderboardPolling(): void {
+  if (leaderboardPollInterval) {
+    clearInterval(leaderboardPollInterval);
+    leaderboardPollInterval = undefined;
+  }
+}
+
+function normalizeSpectatorSide(
+  value: unknown,
+  fallbackName: string,
+): DuelSpectatorSide | null {
+  if (value === null || value === undefined || typeof value !== "object") {
+    return null;
+  }
+
+  const side = value as Record<string, unknown>;
+  const id = side["id"];
+  const name = side["name"];
+  const wpm = side["wpm"];
+  const connected = side["connected"];
+
+  if (typeof id !== "string" || id.trim().length === 0) return null;
+
+  return {
+    id: id.trim(),
+    name:
+      typeof name === "string" && name.trim().length > 0
+        ? name.trim()
+        : fallbackName,
+    wpm: isFiniteNumber(wpm) ? wpm : 0,
+    connected: typeof connected === "boolean" ? connected : true,
+  };
+}
+
+function parseDuelSpectatorPayload(
+  payload: unknown,
+): DuelSpectatorPayload | null {
+  if (
+    payload === null ||
+    payload === undefined ||
+    typeof payload !== "object"
+  ) {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const serverTime = record["serverTime"];
+  const active = record["active"];
+  const race = record["race"];
+  const sides = record["sides"];
+  const roomId = record["roomId"];
+  const roomState = record["roomState"];
+
+  if (!isFiniteNumber(serverTime) || typeof active !== "boolean") {
+    return null;
+  }
+
+  if (race === null || race === undefined || typeof race !== "object") {
+    return null;
+  }
+  if (sides === null || sides === undefined || typeof sides !== "object") {
+    return null;
+  }
+
+  const raceRecord = race as Record<string, unknown>;
+  const startAtRaw = raceRecord["startAt"];
+  const durationRaw = raceRecord["duration"];
+
+  const sidesRecord = sides as Record<string, unknown>;
+  const left = normalizeSpectatorSide(sidesRecord["L"], DEFAULT_LEFT_NAME);
+  const right = normalizeSpectatorSide(sidesRecord["R"], DEFAULT_RIGHT_NAME);
+
+  return {
+    serverTime,
+    roomId: typeof roomId === "string" ? roomId : null,
+    roomState: typeof roomState === "string" ? roomState : null,
+    active,
+    race: {
+      startAt: isFiniteNumber(startAtRaw) ? startAtRaw : null,
+      duration:
+        isFiniteNumber(durationRaw) && durationRaw > 0 ? durationRaw : 30,
+    },
+    sides: {
+      L: left,
+      R: right,
+    },
+  };
+}
+
+function stopDuelClock(): void {
+  if (duelClockInterval) {
+    clearInterval(duelClockInterval);
+    duelClockInterval = undefined;
+  }
+}
+
+function resetDuelClock(): void {
+  stopDuelClock();
+  duelClockStartAt = null;
+  duelClockDuration = 30;
+  duelServerOffset = 0;
+}
+
+function getSyncedServerNow(): number {
+  return Date.now() + duelServerOffset;
+}
+
+function tickDuelClock(): void {
+  if (duelClockStartAt === null) {
+    updateTimer(duelClockDuration, duelClockDuration);
+    return;
+  }
+
+  const elapsed = Math.max(0, (getSyncedServerNow() - duelClockStartAt) / 1000);
+  const timeLeft = Math.max(0, duelClockDuration - elapsed);
+  updateTimer(timeLeft, duelClockDuration);
+}
+
+function syncDuelClock(
+  startAt: number | null,
+  duration: number,
+  serverTime: number,
+): void {
+  duelClockDuration = duration > 0 ? duration : 30;
+  duelServerOffset = serverTime - Date.now();
+  duelClockStartAt = startAt;
+
+  tickDuelClock();
+
+  if (duelClockStartAt === null) {
+    stopDuelClock();
+    return;
+  }
+
+  duelClockInterval ??= setInterval(() => {
+    tickDuelClock();
+  }, DUEL_CLOCK_TICK_MS);
+}
+
+function applyDuelSpectatorState(state: DuelSpectatorPayload): void {
+  const left = state.sides.L;
+  const right = state.sides.R;
+
+  updatePlayer1({
+    name: left?.name ?? DEFAULT_LEFT_NAME,
+    wpm: left?.wpm ?? 0,
+    isConnected: left?.connected ?? false,
+  });
+  updatePlayer2({
+    name: right?.name ?? DEFAULT_RIGHT_NAME,
+    wpm: right?.wpm ?? 0,
+    isConnected: right?.connected ?? false,
+  });
+
+  syncDuelClock(state.race.startAt, state.race.duration, state.serverTime);
+
+  if (state.active) {
+    void showDuel();
+  } else {
+    void showLeaderboard();
+  }
+}
+
+async function fetchDuelStateFromServer(): Promise<DuelSpectatorPayload | null> {
+  const response = await fetch(getDuelSpectatorUrl(), {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const payload: unknown = await response.json();
+  return parseDuelSpectatorPayload(payload);
+}
+
+async function syncDuelStateFromServer(): Promise<boolean> {
+  if (duelStateFetchInFlight) return false;
+  duelStateFetchInFlight = true;
+
+  try {
+    const payload = await fetchDuelStateFromServer();
+    hasWarnedDuelStateFetch = false;
+    if (!payload) return false;
+    applyDuelSpectatorState(payload);
+    return true;
+  } catch (error) {
+    if (!hasWarnedDuelStateFetch) {
+      console.warn("[SpectatorScreen] Failed to fetch duel live state:", error);
+      hasWarnedDuelStateFetch = true;
+    }
+    return false;
+  } finally {
+    duelStateFetchInFlight = false;
+  }
+}
+
+function startDuelStatePolling(): void {
+  stopDuelStatePolling();
+  duelStatePollInterval = setInterval(() => {
+    void syncDuelStateFromServer();
+  }, DUEL_STATE_POLL_INTERVAL_MS);
+}
+
+function stopDuelStatePolling(): void {
+  if (duelStatePollInterval) {
+    clearInterval(duelStatePollInterval);
+    duelStatePollInterval = undefined;
+  }
 }
 
 // ============ VIEW SWITCHING ============
@@ -144,7 +565,7 @@ export function getCurrentView(): ViewType {
 function createRow(entry: LeaderboardEntry, rank: number): ElementWithUtils {
   const row = createElementWithUtils("div", {
     classList: ["leaderboardRow"],
-    dataset: { name: entry.name },
+    dataset: { key: entry.id, name: entry.name },
   });
 
   const isPlaceholder = entry.wpm === -1;
@@ -203,15 +624,15 @@ export function update(updatedEntry: LeaderboardEntry): void {
   const container = qs("#leaderboardBody");
   if (container === null) return;
 
-  const idx = entries.findIndex((e) => e.name === updatedEntry.name);
+  const idx = entries.findIndex((e) => e.id === updatedEntry.id);
   if (idx !== -1) entries[idx] = updatedEntry;
   else entries.push(updatedEntry);
 
   const oldPositions = new Map<string, number>();
   container.qsa(".leaderboardRow").forEach((row) => {
-    const name = row.native.dataset["name"];
-    if (name !== undefined && name !== "") {
-      oldPositions.set(name, row.native.getBoundingClientRect().top);
+    const key = row.native.dataset["key"];
+    if (key !== undefined && key !== "") {
+      oldPositions.set(key, row.native.getBoundingClientRect().top);
     }
   });
 
@@ -222,15 +643,15 @@ export function update(updatedEntry: LeaderboardEntry): void {
   });
 
   container.qsa(".leaderboardRow").forEach((row) => {
-    const name = row.native.dataset["name"];
-    if (name === undefined || name === "") return;
+    const key = row.native.dataset["key"];
+    if (key === undefined || key === "") return;
 
-    const oldTop = oldPositions.get(name);
+    const oldTop = oldPositions.get(key);
     const newTop = row.native.getBoundingClientRect().top;
 
     if (oldTop !== undefined) {
       const delta = oldTop - newTop;
-      const isTarget = name === updatedEntry.name;
+      const isTarget = key === updatedEntry.id;
 
       if (delta !== 0 || isTarget) {
         if (isTarget) {
@@ -328,19 +749,23 @@ function updatePlayerCard(playerNum: 1 | 2, playerState: PlayerState): void {
   const waitingState = card.qs(".waitingState");
   const nameElement = card.qs(".name");
   const wpmValue = card.qs(".wpmValue");
+  const waitingText = card.qs(".waitingText");
 
   if (!playerInfo || !waitingState || !nameElement || !wpmValue) return;
+
+  const fallbackName = playerNum === 1 ? DEFAULT_LEFT_NAME : DEFAULT_RIGHT_NAME;
 
   if (playerState.isConnected) {
     playerInfo.removeClass("hidden");
     waitingState.addClass("hidden");
     nameElement.setText(
-      playerState.name !== "" ? playerState.name : `Player ${playerNum}`,
+      playerState.name !== "" ? playerState.name : fallbackName,
     );
     wpmValue.setText(Math.round(playerState.wpm).toString());
   } else {
     playerInfo.addClass("hidden");
     waitingState.removeClass("hidden");
+    waitingText?.setText(`Waiting for ${playerState.name || fallbackName}`);
   }
 }
 
@@ -364,8 +789,8 @@ function updateTimerDisplay(): void {
 }
 
 export function reset(): void {
-  duelState.player1 = { name: "", wpm: 0, isConnected: false };
-  duelState.player2 = { name: "", wpm: 0, isConnected: false };
+  duelState.player1 = { name: DEFAULT_LEFT_NAME, wpm: 0, isConnected: false };
+  duelState.player2 = { name: DEFAULT_RIGHT_NAME, wpm: 0, isConnected: false };
   duelState.timeLeft = 30;
   duelState.maxTime = 30;
 
@@ -412,11 +837,17 @@ export const page = new Page({
   beforeShow: async () => {
     pageElement = null;
     currentView = "leaderboard";
+    entries = [];
+    hasWarnedLeaderboardFetch = false;
+    leaderboardFetchInFlight = false;
+    hasWarnedDuelStateFetch = false;
+    duelStateFetchInFlight = false;
+    stopLeaderboardPolling();
+    stopDuelStatePolling();
+    resetDuelClock();
     reset();
   },
   afterShow: async () => {
-    void showLeaderboard();
-
     addToGlobal({
       spectatorScreen: {
         showLeaderboard,
@@ -432,54 +863,25 @@ export const page = new Page({
       },
     });
 
-    // ============ WEBSOCKET STUB ============
-    // TODO: Add WebSocket listener here
-    // socket.on("raceStart", () => showDuel());
-    // socket.on("raceEnd", () => showLeaderboard());
-
-    const dataPath = USE_DUMMY_DATA ? DUMMY_DATA_PATH : PROD_DATA_PATH;
-    const response = await fetch(dataPath);
-    const participants = (await response.json()) as LeaderboardEntry[];
-
-    const placeholders = participants
-      .map((d) => ({
-        ...d,
-        wpm: -1,
-        acc: -1,
-        raw: -1,
-        consistency: -1,
-        date: -1,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    init(placeholders);
-
-    if (USE_DUMMY_DATA) {
-      participants.forEach((realEntry, idx) => {
-        setTimeout(
-          () => {
-            update(realEntry);
-          },
-          1000 + idx * 800,
-        );
-      });
-
-      const hamiltonEntry = participants.find((p) => p.name === "Hamilton");
-      if (hamiltonEntry) {
-        setTimeout(() => {
-          update({
-            name: hamiltonEntry.name,
-            wpm: 200,
-            acc: hamiltonEntry.acc,
-            raw: hamiltonEntry.raw,
-            consistency: hamiltonEntry.consistency,
-            date: hamiltonEntry.date,
-          });
-        }, 7000);
-      }
+    const duelLoaded = await syncDuelStateFromServer();
+    if (!duelLoaded) {
+      void showLeaderboard();
     }
+
+    const loadedFromServer = await syncLeaderboardFromServer();
+    if (!loadedFromServer) {
+      const fallbackEntries = await fetchFallbackLeaderboard().catch(
+        (): LeaderboardEntry[] => [],
+      );
+      reconcileLeaderboard(fallbackEntries);
+    }
+
+    startDuelStatePolling();
+    startLeaderboardPolling();
   },
   beforeHide: async () => {
-    // Cleanup if needed
+    stopLeaderboardPolling();
+    stopDuelStatePolling();
+    stopDuelClock();
   },
 });

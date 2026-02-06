@@ -7,6 +7,7 @@ import type { Room, UserProgress } from "../types/room.js";
 import { DUEL_CONFIG, type DuelSide } from "../config.js";
 import { getDefaultRoomConfig } from "../types/config.js";
 import { timerService, TimerType } from "./timer-service.js";
+import { transitionRoom } from "./race-service.js";
 import Logger from "../utils/logger.js";
 import type {
   ClientToServerEvents,
@@ -44,6 +45,9 @@ const disconnectGracePeriods: Map<
   ReturnType<typeof setTimeout>
 > = new Map();
 const DISCONNECT_GRACE_MS = 10_000; // 10 seconds
+
+// Pending duel race start timeout (cleared on disconnect to prevent 1-player races)
+let duelStartTimeout: ReturnType<typeof setTimeout> | undefined;
 
 function clearGracePeriodForSocket(socketId: string): void {
   const timer = disconnectGracePeriods.get(socketId);
@@ -117,23 +121,25 @@ export function registerSystem(
       );
       if (!existingSocket || existingSocket.disconnected) {
         // Dead socket detected — transfer side to new socket
+        const oldSocketId = existingParticipant.socketId;
         Logger.info(
-          `Dead socket ${existingParticipant.socketId} detected on side ${side}, transferring to ${socket.id}`,
+          `Dead socket ${oldSocketId} detected on side ${side}, transferring to ${socket.id}`,
         );
-        clearGracePeriodForSocket(existingParticipant.socketId);
-        const transferred = duelStore.transferSide(
-          existingParticipant.socketId,
-          socket.id,
-        );
+        clearGracePeriodForSocket(oldSocketId);
+        const transferred = duelStore.transferSide(oldSocketId, socket.id);
         if (transferred) {
           (socket.data as SocketData & { duelSide?: DuelSide }).duelSide = side;
           socket.data.name = transferred.username || socket.data.name;
 
           const roomTransfer = roomStore.transferUserSocket(
-            existingParticipant.socketId,
+            oldSocketId,
             socket.id,
           );
           if (roomTransfer) {
+            // Notify peers the old socket ID is gone (prevents ghost entries)
+            socket
+              .to(roomTransfer.room.id)
+              .emit("room_player_left", { userId: oldSocketId });
             socket.data.roomId = roomTransfer.room.id;
             void socket.join(roomTransfer.room.id);
           }
@@ -151,31 +157,31 @@ export function registerSystem(
         }
       } else {
         // Check if in reconnect grace period
-        const gracePeriod = disconnectGracePeriods.get(
-          existingParticipant.socketId,
-        );
+        const oldSocketId = existingParticipant.socketId;
+        const gracePeriod = disconnectGracePeriods.get(oldSocketId);
         if (gracePeriod) {
           // Cancel grace period timer and transfer
           clearTimeout(gracePeriod);
-          disconnectGracePeriods.delete(existingParticipant.socketId);
+          disconnectGracePeriods.delete(oldSocketId);
 
           Logger.info(
-            `Grace period active for ${existingParticipant.socketId} on side ${side}, transferring to ${socket.id}`,
+            `Grace period active for ${oldSocketId} on side ${side}, transferring to ${socket.id}`,
           );
-          const transferred = duelStore.transferSide(
-            existingParticipant.socketId,
-            socket.id,
-          );
+          const transferred = duelStore.transferSide(oldSocketId, socket.id);
           if (transferred) {
             (socket.data as SocketData & { duelSide?: DuelSide }).duelSide =
               side;
             socket.data.name = transferred.username || socket.data.name;
 
             const roomTransfer = roomStore.transferUserSocket(
-              existingParticipant.socketId,
+              oldSocketId,
               socket.id,
             );
             if (roomTransfer) {
+              // Notify peers the old socket ID is gone (prevents ghost entries)
+              socket
+                .to(roomTransfer.room.id)
+                .emit("room_player_left", { userId: oldSocketId });
               socket.data.roomId = roomTransfer.room.id;
               void socket.join(roomTransfer.room.id);
             }
@@ -440,6 +446,11 @@ export function joinLobby(
 
     Logger.info(`${participant.username} joined duel room ${roomId}`);
 
+    // Only auto-start if room is in LOBBY state (prevent re-trigger on reconnect)
+    if (existingRoom.state !== "LOBBY") {
+      return buildJoinLobbyResponse(result.room);
+    }
+
     // Both players are now in the room - auto-start the duel!
     // Schedule race to start after countdown delay
     const startAt = Date.now() + DUEL_CONFIG.START_DELAY_MS;
@@ -448,6 +459,9 @@ export function joinLobby(
     Logger.info(
       `Scheduling duel race at ${startAt} (in ${DUEL_CONFIG.START_DELAY_MS}ms), seed: ${seed}`,
     );
+
+    // Clear stale WPM from previous race
+    duelStore.clearLiveWpm();
 
     // Emit to all players in the room (including the joiner)
     io.to(roomId).emit("duel_race_scheduled", {
@@ -474,8 +488,12 @@ export function joinLobby(
 
     // Transition to RACE_ONGOING after the start delay so progress broadcasts work
     const duelRoomId = roomId; // Capture for closure (guaranteed non-null in else branch)
-    setTimeout(() => {
-      if (existingRoom.state === "LOBBY") {
+    duelStartTimeout = setTimeout(() => {
+      duelStartTimeout = undefined;
+      if (
+        existingRoom.state === "LOBBY" &&
+        Object.keys(existingRoom.users).length >= 2
+      ) {
         existingRoom.state = "RACE_ONGOING";
         io.to(duelRoomId).emit("room_state_changed", {
           state: "RACE_ONGOING",
@@ -493,6 +511,10 @@ export function joinLobby(
             // Progress updates run until manually stopped
           },
         });
+      } else {
+        Logger.warning(
+          `Duel race aborted — ${Object.keys(existingRoom.users).length} users in room`,
+        );
       }
     }, DUEL_CONFIG.START_DELAY_MS);
 
@@ -516,6 +538,13 @@ export function handleDisconnect(io: TribesServer, socket: TribesSocket): void {
   Logger.info(
     `Socket ${socket.id} (Side ${side}) disconnected — starting ${DISCONNECT_GRACE_MS}ms grace period`,
   );
+
+  // Cancel any pending race start — prevents 1-player race after disconnect
+  if (duelStartTimeout) {
+    clearTimeout(duelStartTimeout);
+    duelStartTimeout = undefined;
+    Logger.info(`Cleared pending duel race start due to disconnect`);
+  }
 
   // Notify opponent of temporary disconnect
   const roomId = duelStore.getActiveRoom();
@@ -548,6 +577,12 @@ export function handleDisconnect(io: TribesServer, socket: TribesSocket): void {
           duelStore.clearActiveRoom();
           duelStore.resetForNextDuel();
           Logger.info(`Duel room ${roomId} deleted, duel state reset`);
+        } else if (updatedRoom.state !== "LOBBY") {
+          // Room still has users but is stuck in a race state — reset to lobby
+          Logger.info(
+            `Resetting duel room ${roomId} to LOBBY after grace expiry (was ${updatedRoom.state})`,
+          );
+          transitionRoom(io, roomId, "LOBBY");
         }
       }
     }

@@ -1,6 +1,29 @@
 import { envConfig } from "virtual:env-config";
 import { configurationPromise, get } from "../ape/server-configuration";
 
+/**
+ * Resolve the Tribes Server base URL for socket + HTTP duel endpoints.
+ */
+export function getTribesServerUrl(): string {
+  const hostname = window.location.hostname;
+
+  if (
+    hostname === "monkeytype.rbh.makerspace.tools" ||
+    hostname === "www.monkeytype.rbh.makerspace.tools"
+  ) {
+    return "https://tribe.monkeytype.rbh.makerspace.tools";
+  }
+
+  if (
+    hostname === "monkeytype-test.rbh.makerspace.tools" ||
+    hostname === "www.monkeytype-test.rbh.makerspace.tools"
+  ) {
+    return "https://tribe.monkeytype-test.rbh.makerspace.tools";
+  }
+
+  return `http://${hostname}:3005`;
+}
+
 export function getTribeMode(): "disabled" | "enabled" | "enabled_stealth" {
   if (envConfig.forceTribe) return "enabled";
   return get()?.tribe?.mode ?? "disabled";
