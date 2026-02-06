@@ -15,12 +15,41 @@ import * as TestState from "../test/test-state";
 import * as TribeState from "../tribe/tribe-state";
 import { isAnyChatSuggestionVisible } from "../tribe/tribe-chat";
 import * as Tribe from "../tribe/tribe";
+import * as DuelState from "../tribe/duel/duel-state";
 
 document.addEventListener("keydown", async (e) => {
   if (PageTransition.get()) return;
   if (e.key === undefined) return;
 
-  const pageTestActive: boolean = ActivePage.get() === "test";
+  const activePage = ActivePage.get();
+  const pageTestActive: boolean = activePage === "test";
+  const duelState = DuelState.getFlowState();
+  const duelHotkeysLocked =
+    (activePage === "test" ||
+      activePage === "tribe" ||
+      activePage === "waiting") &&
+    duelState !== "SYSTEM_SELECT" &&
+    duelState !== "OTP";
+
+  if (
+    duelHotkeysLocked &&
+    !isInputElementFocused() &&
+    (e.key === "Tab" || e.key === "Enter" || e.key === "Escape")
+  ) {
+    e.preventDefault();
+    return;
+  }
+
+  if (
+    duelHotkeysLocked &&
+    e.key.toLowerCase() === "p" &&
+    (e.metaKey || e.ctrlKey) &&
+    e.shiftKey
+  ) {
+    e.preventDefault();
+    return;
+  }
+
   if (pageTestActive && !TestState.resultVisible && !isInputElementFocused()) {
     const popupVisible: boolean = Misc.isAnyPopupVisible();
     // this is nested because isAnyPopupVisible is a bit expensive

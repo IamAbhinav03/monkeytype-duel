@@ -38,6 +38,7 @@ let eulaTimeout: ReturnType<typeof setTimeout> | undefined;
 let waitingNavigationTimeout: ReturnType<typeof setTimeout> | undefined;
 let showLobbyTimeout: ReturnType<typeof setTimeout> | undefined;
 let raceCountdownInterval: ReturnType<typeof setInterval> | undefined;
+let showAutoAdvanceTimeout: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * Initialize the duel flow.
@@ -440,14 +441,32 @@ async function startPracticeFlow(): Promise<void> {
     ? PRACTICE_1_DURATION_SECONDS
     : PRACTICE_2_DURATION_SECONDS;
 
+  // Ensure stale race UI/charts from a previous duel round do not leak forward
+  hideAutoAdvanceButton();
+  hideCountdownBelowResults();
+  TribeChartController.destroyAllCharts();
+  TribeResults.reset("result");
+
   DuelState.setFlowState(isPractice1 ? "PRACTICE_1" : "PRACTICE_2");
 
   // Configure for time mode with appropriate duration
-  UpdateConfig.setConfig("mode", "time", { nosave: true });
-  UpdateConfig.setConfig("time", duration, { nosave: true });
-  UpdateConfig.setConfig("language", "english", { nosave: true });
-  UpdateConfig.setConfig("numbers", false, { nosave: true });
-  UpdateConfig.setConfig("punctuation", false, { nosave: true });
+  UpdateConfig.setConfig("mode", "time", { nosave: true, tribeOverride: true });
+  UpdateConfig.setConfig("time", duration, {
+    nosave: true,
+    tribeOverride: true,
+  });
+  UpdateConfig.setConfig("language", "english", {
+    nosave: true,
+    tribeOverride: true,
+  });
+  UpdateConfig.setConfig("numbers", false, {
+    nosave: true,
+    tribeOverride: true,
+  });
+  UpdateConfig.setConfig("punctuation", false, {
+    nosave: true,
+    tribeOverride: true,
+  });
 
   // Show banner on test page after navigation
   const bannerName = DuelState.getUsername() ?? DuelState.getSide() ?? "?";
@@ -758,6 +777,8 @@ export function onOpponentLeft(_side: DuelSide): void {
   if (state === "LOBBY" || state === "RACING" || state === "RESULTS") {
     // Cancel all pending race timers (scheduled navigation, countdown, etc.)
     cleanupTransientTimers();
+    hideAutoAdvanceButton();
+    hideCountdownBelowResults();
     hideDuelBanner();
 
     // Hide countdown overlay if it was showing
@@ -811,6 +832,10 @@ export function onRaceScheduled(
   // Set state to RACING
   DuelState.setFlowState("RACING");
 
+  // Starting a fresh duel race: ensure previous charts/result rows do not bleed over
+  TribeChartController.destroyAllCharts();
+  TribeResults.reset("result");
+
   // Mark self as typing and set room state to RACE_ONGOING
   // This is required for input to work (keydown handler checks isRaceActive)
   // Set room to RACE_COUNTDOWN during the waiting/countdown phase.
@@ -841,11 +866,23 @@ export function onRaceScheduled(
 
   // Configure race settings BEFORE navigation
   // This ensures words are generated with correct config
-  UpdateConfig.setConfig("mode", "time", { nosave: true });
-  UpdateConfig.setConfig("time", raceDurationSeconds, { nosave: true });
-  UpdateConfig.setConfig("language", "english", { nosave: true });
-  UpdateConfig.setConfig("numbers", false, { nosave: true });
-  UpdateConfig.setConfig("punctuation", false, { nosave: true });
+  UpdateConfig.setConfig("mode", "time", { nosave: true, tribeOverride: true });
+  UpdateConfig.setConfig("time", raceDurationSeconds, {
+    nosave: true,
+    tribeOverride: true,
+  });
+  UpdateConfig.setConfig("language", "english", {
+    nosave: true,
+    tribeOverride: true,
+  });
+  UpdateConfig.setConfig("numbers", false, {
+    nosave: true,
+    tribeOverride: true,
+  });
+  UpdateConfig.setConfig("punctuation", false, {
+    nosave: true,
+    tribeOverride: true,
+  });
 
   // Set waiting page message via DuelState — the waiting page's afterShow reads it
   DuelState.setWaitingPageMessage("Get ready...");
@@ -1055,7 +1092,8 @@ export function onDuelRaceComplete(): void {
   });
 
   // Show auto-advance button below results after a short delay
-  setTimeout(() => {
+  showAutoAdvanceTimeout = setTimeout(() => {
+    showAutoAdvanceTimeout = undefined;
     showAutoAdvanceButton();
   }, 500);
 }
@@ -1135,6 +1173,10 @@ function showAutoAdvanceButton(): void {
  * Hide and clean up the auto-advance button.
  */
 function hideAutoAdvanceButton(): void {
+  if (showAutoAdvanceTimeout) {
+    clearTimeout(showAutoAdvanceTimeout);
+    showAutoAdvanceTimeout = undefined;
+  }
   if (autoAdvanceInterval) {
     clearInterval(autoAdvanceInterval);
     autoAdvanceInterval = undefined;
@@ -1345,6 +1387,10 @@ function cleanupTransientTimers(): void {
   if (raceCountdownInterval) {
     clearInterval(raceCountdownInterval);
     raceCountdownInterval = undefined;
+  }
+  if (showAutoAdvanceTimeout) {
+    clearTimeout(showAutoAdvanceTimeout);
+    showAutoAdvanceTimeout = undefined;
   }
 }
 
