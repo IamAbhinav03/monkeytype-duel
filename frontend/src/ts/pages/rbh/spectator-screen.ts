@@ -712,26 +712,49 @@ export async function showDuel(): Promise<void> {
 
   const leaderboardView = page.qs("#leaderboardView");
   const duelView = page.qs("#duelView");
+  const countdownOverlay = page.qs("#countdownOverlay");
+  const countdownNumber = page.qs("#countdownNumber");
 
-  if (!leaderboardView || !duelView) return;
+  if (!leaderboardView || !duelView || !countdownOverlay || !countdownNumber) {
+    return;
+  }
 
   isTransitioning = true;
 
-  // Fade out + blur current view
+  // Fade out leaderboard
   leaderboardView.addClass("transitioning-out");
-
   await new Promise((resolve) => setTimeout(resolve, TRANSITION_DURATION));
 
   leaderboardView.addClass("hidden");
   leaderboardView.removeClass("transitioning-out");
 
-  // Show and fade in new view
+  // Show duel view blurred behind countdown
   duelView.removeClass("hidden");
+  duelView.setStyle({ filter: "blur(24px)", opacity: "0.5" });
+
+  // Show countdown overlay with fade-in
+  countdownOverlay.addClass("fade-in");
+  countdownOverlay.removeClass("hidden");
+  void countdownOverlay.native.offsetHeight; // Force reflow
+  countdownOverlay.removeClass("fade-in");
+
+  // Run 10-second countdown
+  for (let i = 10; i >= 1; i--) {
+    countdownNumber.setText(i.toString());
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  // Fade out countdown overlay
+  countdownOverlay.addClass("fade-out");
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  countdownOverlay.addClass("hidden");
+  countdownOverlay.removeClass("fade-out");
+
+  // Reveal duel view (remove blur)
+  duelView.setStyle({ filter: "blur(0)", opacity: "1" });
   duelView.addClass("transitioning-in");
 
-  // Force reflow before removing transition class
   void duelView.native.offsetHeight;
-
   await new Promise((resolve) => setTimeout(resolve, 50));
   duelView.removeClass("transitioning-in");
 
