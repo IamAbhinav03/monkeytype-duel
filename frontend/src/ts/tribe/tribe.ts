@@ -45,10 +45,6 @@ export const expectedVersion = isDevEnvironment() ? "dev" : "25.12.4";
 
 function updateClientState(state: TribeTypes.ClientState): void {
   TribeState.setState(state);
-
-  $("#tribeStateDisplay").text(
-    `${TribeState.getState()} - ${TribeState.getRoom()?.state}`,
-  );
 }
 
 function updateRoomState(state: TribeTypes.RoomState): void {
@@ -58,10 +54,6 @@ function updateRoomState(state: TribeTypes.RoomState): void {
   } else {
     return;
   }
-
-  $("#tribeStateDisplay").text(
-    `${TribeState.getState()} - ${TribeState.getRoom()?.state}`,
-  );
 
   if (state === TribeTypes.ROOM_STATE.LOBBY) {
     TribePageLobby.enableNameVisibilityButtons();
