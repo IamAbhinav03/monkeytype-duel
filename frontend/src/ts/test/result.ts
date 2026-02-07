@@ -1148,7 +1148,16 @@ export async function update(
     }
   }
 
-  AdController.updateFooterAndVerticalAds(true);
+  const duelFlowState = DuelState.getFlowState();
+  const isDuelSession =
+    duelFlowState !== "SYSTEM_SELECT" && duelFlowState !== "OTP";
+
+  if (isDuelSession) {
+    AdController.updateFooterAndVerticalAds(false);
+    AdController.destroyResult();
+  } else {
+    AdController.updateFooterAndVerticalAds(true);
+  }
   void Funbox.clear();
 
   $(".pageTest .loading").addClass("hidden");
@@ -1165,7 +1174,9 @@ export async function update(
   });
 
   Misc.scrollToCenterOrTop(resultEl);
-  void AdController.renderResult();
+  if (!isDuelSession) {
+    void AdController.renderResult();
+  }
   TestUI.setResultCalculating(false);
   $("#words").empty();
   ChartController.result.resize();
