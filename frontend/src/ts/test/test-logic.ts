@@ -1223,44 +1223,24 @@ export async function finish(difficultyFailed = false): Promise<void> {
       completedEvent.hash = objectHash(completedEvent);
 
       savingResultPromise = saveResult(completedEvent, false);
-      void savingResultPromise
-        .then((promise) => {
-          if (promise.response && promise.response.status === 200) {
-            void AnalyticsController.log("testCompleted");
-            resolveTestSavePromise({
-              login: true,
-              bailedOut: completedEvent.bailedOut,
-              ...(promise.saved
-                ? {
-                    saved: true,
-                    isPb: promise.response.body.data?.isPb ?? false,
-                  }
-                : {
-                    saved: false,
-                    saveFailedMessage: promise.message,
-                  }),
-            });
-            return;
-          }
-
+      void savingResultPromise.then((promise) => {
+        if (promise.response && promise.response.status === 200) {
+          void AnalyticsController.log("testCompleted");
           resolveTestSavePromise({
             login: true,
             bailedOut: completedEvent.bailedOut,
-            saved: false,
-            saveFailedMessage: promise.message,
+            ...(promise.saved
+              ? {
+                  saved: true,
+                  isPb: promise.response.body.data?.isPb ?? false,
+                }
+              : {
+                  saved: false,
+                  saveFailedMessage: promise.message,
+                }),
           });
-        })
-        .catch((error: unknown) => {
-          resolveTestSavePromise({
-            login: true,
-            bailedOut: completedEvent.bailedOut,
-            saved: false,
-            saveFailedMessage: Misc.createErrorMessage(
-              error,
-              "Failed to save result",
-            ),
-          });
-        });
+        }
+      });
     }
   } else {
     // logged out
@@ -1297,49 +1277,26 @@ export async function finish(difficultyFailed = false): Promise<void> {
     dontSave,
   );
 
-  const wasDuelPractice = DuelFlow.isPracticing();
-  const wasDuelRace = DuelFlow.isRacing();
-
-  // Never block duel progression on result-save latency/failures.
-  void (async () => {
-    const resolve = await testSavePromise;
-    await TribeResults.send({
-      wpm: completedEvent.wpm,
-      raw: completedEvent.rawWpm,
-      acc: completedEvent.acc,
-      consistency: completedEvent.consistency,
-      testDuration: completedEvent.testDuration,
-      charStats: completedEvent.charStats,
-      chartData: tribeChartData,
-      resolve,
-    });
-  })().catch((error: unknown) => {
-    console.warn(
-      "[TestLogic] Failed to broadcast tribe result payload:",
-      error,
-    );
+  void TribeResults.send({
+    wpm: completedEvent.wpm,
+    raw: completedEvent.rawWpm,
+    acc: completedEvent.acc,
+    consistency: completedEvent.consistency,
+    testDuration: completedEvent.testDuration,
+    charStats: completedEvent.charStats,
+    chartData: tribeChartData,
+    resolve: await testSavePromise,
   });
 
-  if (wasDuelPractice || wasDuelRace) {
-    try {
-      await resultUpdatePromise;
-    } catch (error) {
-      console.error(
-        "[TestLogic] Result update failed during duel flow:",
-        error,
-      );
-    }
-  } else {
-    await Promise.all([savingResultPromise, resultUpdatePromise]);
-  }
+  await Promise.all([savingResultPromise, resultUpdatePromise]);
 
   // Check if this was a duel practice test
-  if (wasDuelPractice && DuelFlow.isPracticing()) {
+  if (DuelFlow.isPracticing()) {
     console.log(
       "[TestLogic] Duel practice test completed, notifying duel flow",
     );
     void DuelFlow.onPracticeComplete();
-  } else if (wasDuelRace && DuelFlow.isRacing()) {
+  } else if (DuelFlow.isRacing()) {
     console.log("[TestLogic] Duel race completed, notifying duel flow");
     DuelFlow.onDuelRaceComplete();
   }
@@ -1390,32 +1347,7 @@ async function saveResult(
     };
   }
 
-  let response: Awaited<ReturnType<typeof Ape.results.add>>;
-  try {
-    response = await Ape.results.add({ body: { result: completedEvent } });
-  } catch (error) {
-    AccountButton.loading(false);
-
-    if (!TribeState.isInARoom()) {
-      retrySaving.canRetry = true;
-      $("#retrySavingResultButton").removeClass("hidden");
-      if (!isRetrying) {
-        retrySaving.completedEvent = completedEvent;
-      }
-    }
-
-    const message = Misc.createErrorMessage(error, "Failed to save result");
-    Notifications.add(message, -1, {
-      important: true,
-      duration: 4,
-    });
-
-    return {
-      saved: false,
-      message,
-      response: null,
-    };
-  }
+  const response = await Ape.results.add({ body: { result: completedEvent } });
 
   AccountButton.loading(false);
 
@@ -1752,7 +1684,8 @@ ConfigEvent.subscribe(({ key, newValue, nosave }) => {
         void KeymapEvent.highlight(
           Arrays.nthElementFromArray(
             // ignoring for now but this might need a different approach
-            Array.from(TestWords.words.getCurrent()),
+            // oxlint-disable-next-line no-misused-spread
+            [...TestWords.words.getCurrent()],
             0,
           ) as string,
         );

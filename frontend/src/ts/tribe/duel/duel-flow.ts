@@ -52,12 +52,6 @@ export async function init(): Promise<void> {
   hideCountdownBelowResults();
   hideDuelBanner();
 
-  // Duel events run ad-free: force ads off for this session.
-  UpdateConfig.setConfig("ads", "off", {
-    nosave: true,
-    tribeOverride: true,
-  });
-
   // Initialize state (checks localStorage for side)
   const initialState = DuelState.initDuelState();
 
